@@ -46,7 +46,7 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
 
     const getUserName = (userId) => {
         const user = users?.find(u => u.id === userId);
-        return user?.displayname || "Unknown User";
+        return user?.displayname || "Onbekende Gebruiker";
     };
 
     const getStatusColor = (status) => {
@@ -156,24 +156,24 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
     const receivedRequests = swapRequests.filter(req => req.targetedUserId === session?.user?.id);
 
     if (!session) {
-        return <div className="p-4">Please log in to view swap requests.</div>;
+        return <div className="p-4">Inloggen om ruilverzoeken te bekijken.</div>;
     }
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Swap Requests</h2>
+            <h2 className="text-2xl font-bold">Ruilverzoeken</h2>
 
             {/* Received Requests */}
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Clock className="h-5 w-5" />
-                        Requests Received ({receivedRequests.length})
+                        Ontvangen Ruil Verzoeken ({receivedRequests.length})
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     {receivedRequests.length === 0 ? (
-                        <p className="text-muted-foreground">No requests received yet.</p>
+                        <p className="text-muted-foreground">Geen ontvangen verzoeken.</p>
                     ) : (
                         <div className="space-y-3">
                             {receivedRequests.map(request => (
@@ -181,7 +181,7 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <p className="font-medium">
-                                                From: {getUserName(request.requesterUserId)}
+                                                Van: {getUserName(request.requesterUserId)}
                                             </p>
                                             <p className="text-sm text-muted-foreground">
                                                 {dayjs(request.requestedDate).format('MMM DD, YYYY HH:mm')}
@@ -193,17 +193,17 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div>
-                                            <p className="font-medium">They want to give:</p>
+                                            <p className="font-medium">Ze willen geven:</p>
                                             <p>{request.requesterUnitName} - Hand {request.requesterUnitHand}</p>
                                         </div>
                                         <div>
-                                            <p className="font-medium">They want your:</p>
+                                            <p className="font-medium">Ze willen jouw:</p>
                                             <p>{request.targetedUnitName} - Hand {request.targetedUnitHand}</p>
                                         </div>
                                     </div>
                                     {request.note && (
                                         <div className="mt-2">
-                                            <p className="text-sm font-medium">Note:</p>
+                                            <p className="text-sm font-medium">Opmerkingen:</p>
                                             <p className="text-sm text-muted-foreground">{request.note}</p>
                                         </div>
                                     )}
@@ -215,7 +215,7 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                                 className="bg-green-600 hover:bg-green-700"
                                             >
                                                 <Check className="h-4 w-4 mr-1" />
-                                                Accept
+                                                Accepteren
                                             </Button>
                                             <Button
                                                 size="sm"
@@ -223,13 +223,13 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                                 onClick={() => openResponseDialog(request, "reject")}
                                             >
                                                 <X className="h-4 w-4 mr-1" />
-                                                Reject
+                                                Afwijzen
                                             </Button>
                                         </div>
                                     )}
                                     {request.responseNote && (
                                         <div className="mt-2 p-2 bg-gray-50 rounded">
-                                            <p className="text-sm font-medium">Your response:</p>
+                                            <p className="text-sm font-medium">Jouw antwoord:</p>
                                             <p className="text-sm">{request.responseNote}</p>
                                         </div>
                                     )}
@@ -245,12 +245,12 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <MessageSquare className="h-5 w-5" />
-                        Requests Sent ({sentRequests.length})
+                        Verzonden Ruil Verzoeken ({sentRequests.length})
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     {sentRequests.length === 0 ? (
-                        <p className="text-muted-foreground">No requests sent yet.</p>
+                        <p className="text-muted-foreground">Geen verzonden verzoeken.</p>
                     ) : (
                         <div className="space-y-3">
                             {sentRequests.map(request => (
@@ -258,7 +258,7 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
                                             <p className="font-medium">
-                                                To: {getUserName(request.targetedUserId)}
+                                                Aan: {getUserName(request.targetedUserId)}
                                             </p>
                                             <p className="text-sm text-muted-foreground">
                                                 {dayjs(request.requestedDate).format('MMM DD, YYYY HH:mm')}
@@ -270,23 +270,23 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                     </div>
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div>
-                                            <p className="font-medium">Your Unit:</p>
+                                            <p className="font-medium">Jouw Hand:</p>
                                             <p>{request.requesterUnitName} - Hand {request.requesterUnitHand}</p>
                                         </div>
                                         <div>
-                                            <p className="font-medium">Requested Unit:</p>
+                                            <p className="font-medium">Gewenste Hand:</p>
                                             <p>{request.targetedUnitName} - Hand {request.targetedUnitHand}</p>
                                         </div>
                                     </div>
                                     {request.note && (
                                         <div className="mt-2">
-                                            <p className="text-sm font-medium">Note:</p>
+                                            <p className="text-sm font-medium">Opmerkingen:</p>
                                             <p className="text-sm text-muted-foreground">{request.note}</p>
                                         </div>
                                     )}
                                     {request.responseNote && (
                                         <div className="mt-2 p-2 bg-gray-50 rounded">
-                                            <p className="text-sm font-medium">Response:</p>
+                                            <p className="text-sm font-medium">Reactie:</p>
                                             <p className="text-sm">{request.responseNote}</p>
                                         </div>
                                     )}
@@ -301,32 +301,32 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                         <DialogTitle>
-                            {actionType === "accept" ? "Accept" : "Reject"} Swap Request
+                            {actionType === "accept" ? "Accepteren" : "Afwijzen"} Ruil Verzoek
                         </DialogTitle>
                         <DialogDescription>
                             {actionType === "accept" 
-                                ? "You're about to accept this swap request. The units will be exchanged immediately."
-                                : "You're about to reject this swap request."
+                                ? "Je staat op het punt dit ruilverzoek te accepteren. De eenheden worden onmiddellijk uitgewisseld."
+                                : "Je staat op het punt dit ruilverzoek af te wijzen."
                             }
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         {selectedRequest && (
                             <div className="space-y-2">
-                                <Label>Swap Details:</Label>
+                                <Label>Ruil Details:</Label>
                                 <div className="p-3 bg-gray-50 rounded">
-                                    <p><strong>From:</strong> {getUserName(selectedRequest.requesterUserId)}</p>
-                                    <p><strong>They give:</strong> {selectedRequest.requesterUnitName} - Hand {selectedRequest.requesterUnitHand}</p>
-                                    <p><strong>You give:</strong> {selectedRequest.targetedUnitName} - Hand {selectedRequest.targetedUnitHand}</p>
+                                    <p><strong>Van:</strong> {getUserName(selectedRequest.requesterUserId)}</p>
+                                    <p><strong>Ze geven:</strong> {selectedRequest.requesterUnitName} - Hand {selectedRequest.requesterUnitHand}</p>
+                                    <p><strong>Jij geeft:</strong> {selectedRequest.targetedUnitName} - Hand {selectedRequest.targetedUnitHand}</p>
                                 </div>
                             </div>
                         )}
                         
                         <div className="space-y-2">
-                            <Label htmlFor="responseNote">Response Note (Optional)</Label>
+                            <Label htmlFor="responseNote">Reactie Opmerking (Optioneel)</Label>
                             <Textarea
                                 id="responseNote"
-                                placeholder="Add a note with your response..."
+                                placeholder="Voeg een opmerking toe bij je reactie..."
                                 value={responseNote}
                                 onChange={(e) => setResponseNote(e.target.value)}
                             />
@@ -337,14 +337,14 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                 variant="outline" 
                                 onClick={() => setResponseDialogOpen(false)}
                             >
-                                Cancel
+                                Annuleren
                             </Button>
                             <Button 
                                 onClick={handleResponse}
                                 className={actionType === "accept" ? "bg-green-600 hover:bg-green-700" : ""}
                                 variant={actionType === "reject" ? "destructive" : "default"}
                             >
-                                {actionType === "accept" ? "Accept Swap" : "Reject Request"}
+                                {actionType === "accept" ? "Accepteren" : "Afwijzen"} Ruil Verzoek
                             </Button>
                         </div>
                     </div>

@@ -6,21 +6,16 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import dayjs from "dayjs";
-import { Popover, PopoverContent, PopoverTrigger,} from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import QRCodeComponent from "@/components/qr-generator";
+import { Save, X } from "lucide-react";
 
-const roles = ["default", "guest", "member", "family", "worker", "admin"];
+const roles = ["default", "guest", "member", "family", "admin"];
 
 export function SignUpForm() {
-
-    const { data: session } = useSession()
-    const router = useRouter();
     const [qrToken, setQrToken] = useState(null);
-    const [loading, setLoading] = useState(false);
     const [open, setOpen] = useState(false);
     const form = useForm({
         defaultValues: {
@@ -35,13 +30,6 @@ export function SignUpForm() {
     });
 
     async function onSubmit(values) {
-
-        // const formData = new FormData();
-        // formData.append("firstname", values.firstname);
-        // formData.append("lastname", values.lastname);
-        // formData.append("password", values.password);
-        // formData.append("email", values.email);
-        // formData.append("role", "default");
 
         const data = {
             email: values.email,
@@ -59,25 +47,24 @@ export function SignUpForm() {
         });
 
         if (res.status == 400) {
-            toast.error("This user account alreay exists, Please use the login form to sign in.");
+            toast.error("Dit e-mailadres is al in gebruik.");
             return;
         }
         if (!res.ok) {
-            toast.error("Failed to create user");
+            toast.error("Fout bij het aanmaken van deelnemer.");
             return;
         }
         const user = await res.json();
-        toast.success("Your account is created");
+        toast.success("Je account is aangemaakt.");
 
         const userToken = Buffer.from(`${values.email}:${values.password}`).toString("base64");
         setQrToken(`https://fambalker.net/guest-access?token=${userToken}`);
-        // router.push("/circles");
     }
 
     // if (loading) {
     return (
         <div className="min-h-screen flex flex-col gap-8 items-center justify-center">
-            <h1 className="text-2xl font-bold">Create your account</h1>
+            <h1 className="text-2xl font-bold">Account aanmaken</h1>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
                     <FormField
@@ -100,9 +87,9 @@ export function SignUpForm() {
                         name="firstname"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Name</FormLabel>
+                                <FormLabel>Voornaam</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="e.g. John" {...field} />
+                                    <Input placeholder="bijv. John" {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -113,7 +100,7 @@ export function SignUpForm() {
                         name="displayname"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Display Name</FormLabel>
+                                <FormLabel>Weergave Naam</FormLabel>
                                 <FormControl>
                                     <Input placeholder="zichtbaar voor alle gebruikers" {...field} />
                                 </FormControl>
@@ -126,9 +113,9 @@ export function SignUpForm() {
                         name="lastname"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Lastname</FormLabel>
+                                <FormLabel>Achternaam</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="e.g. smith" {...field} />
+                                    <Input placeholder="bijv. Smith" {...field} />
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -139,7 +126,7 @@ export function SignUpForm() {
                         name="password"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Password</FormLabel>
+                                <FormLabel>Wachtwoord</FormLabel>
                                 <FormControl>
                                     <Input
                                         type="password"
@@ -154,43 +141,68 @@ export function SignUpForm() {
                         name="role"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Roles</FormLabel>
-                                {/* <FormControl> */}
-                                <Popover open={open} onOpenChange={setOpen}>
-                                    <PopoverTrigger asChild>
+                                <FormLabel>Rollen</FormLabel>
+                                <Dialog open={open} onOpenChange={setOpen}>
+                                    <DialogTrigger asChild>
                                         <Button variant="outline" className="w-full justify-start">
                                             {field.value?.length
                                                 ? field.value.join(", ")
-                                                : "Select roles"}
+                                                : "Selecteer rollen"}
                                         </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[200px]">
-                                        <div className="flex flex-col space-y-2">
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-md">
+                                        <DialogHeader>
+                                            <DialogTitle>Selecteer rollen</DialogTitle>
+                                        </DialogHeader>
+                                        <div className="flex flex-col space-y-3 py-4">
                                             {roles.map((role) => (
-                                                <div key={role} className="flex items-center space-x-2">
+                                                <div 
+                                                    key={role} 
+                                                    className="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-50 cursor-pointer"
+                                                    onClick={() => {
+                                                        // Toggle the checkbox state
+                                                        const isCurrentlyChecked = field.value?.includes(role);
+                                                        const newValue = !isCurrentlyChecked
+                                                            ? [...(field.value || []), role]
+                                                            : field.value?.filter((r) => r !== role);
+                                                        field.onChange(newValue);
+                                                    }}
+                                                >
                                                     <Checkbox
                                                         id={role}
-                                                        checked={field.value?.includes(role)}
+                                                        checked={field.value?.includes(role) || false}
                                                         onCheckedChange={(checked) => {
                                                             const newValue = checked
                                                                 ? [...(field.value || []), role]
                                                                 : field.value?.filter((r) => r !== role);
-
                                                             field.onChange(newValue);
                                                         }}
                                                     />
                                                     <label
                                                         htmlFor={role}
-                                                        className="text-sm font-medium leading-none"
+                                                        className="text-sm font-medium leading-none cursor-pointer flex-1"
                                                     >
                                                         {role.charAt(0).toUpperCase() + role.slice(1)}
                                                     </label>
                                                 </div>
                                             ))}
                                         </div>
-                                    </PopoverContent>
-                                </Popover>
-                                {/* </FormControl> */}
+                                        <div className="flex justify-end gap-2 pt-4 border-t">
+                                            <Button 
+                                                variant="outline" 
+                                                onClick={() => setOpen(false)}
+                                            >
+                                                Annuleren
+                                            </Button>
+                                            <Button 
+                                                onClick={() => setOpen(false)}
+                                            >
+                                                <Save className="w-4 h-4 mr-2" />
+                                                Klaar
+                                            </Button>
+                                        </div>
+                                    </DialogContent>
+                                </Dialog>
                                 <FormMessage />
                             </FormItem>
                         )}
@@ -200,7 +212,7 @@ export function SignUpForm() {
                         name="expires"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Expires</FormLabel>
+                                <FormLabel>Verloopt</FormLabel>
                                 <FormControl>
                                     <Input
                                         type="date"
@@ -211,8 +223,8 @@ export function SignUpForm() {
                             </FormItem>
                         )}
                     />
-                    <Button type="submit" className="w-full">Submit</Button>
-                    <div className="text-sm pb-20 text-gray-500">
+                    <Button type="submit" className="w-full">Verzenden</Button>
+                    <div className="text-sm pb-40 text-gray-500">
                     {qrToken && <QRCodeComponent url={qrToken} />}
                     </div>
                 </form>
@@ -220,9 +232,5 @@ export function SignUpForm() {
         </div>
     );
 }
-//     else {
-//         return (<></>);
-//     }
-// }
 
 export default SignUpForm;

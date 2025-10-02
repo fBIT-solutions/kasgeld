@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 
-export function createKasgeldRun() {
+export function createKasgeldRun({ onSuccess }) {
     const form = useForm({
         defaultValues: {
             year: dayjs().add(1, 'year').format('YYYY'),
@@ -47,9 +47,13 @@ export function createKasgeldRun() {
             toast.error("Failed to create run");
             return;
         }
-        const user = await res.json();
+        const newRun = await res.json();
         toast.success("Your run is created");
-        // router.push("/circles");
+        
+        // Call the onSuccess callback to close the sheet and update the runs
+        if (onSuccess) {
+            onSuccess(newRun);
+        }
     }
 
     // if (loading) {
@@ -91,7 +95,7 @@ export function createKasgeldRun() {
                         name="start"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Start</FormLabel>
+                                <FormLabel>Eerste Inleg</FormLabel>
                                 <FormControl>
                                     <Input type="month" placeholder="e.g. 2025-01" {...field} />
                                 </FormControl>
@@ -104,7 +108,7 @@ export function createKasgeldRun() {
                         name="end"
                         render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Einde</FormLabel>
+                                <FormLabel>Laatste Inleg</FormLabel>
                                 <FormControl>
                                     <Input
                                         type="month"
@@ -114,7 +118,7 @@ export function createKasgeldRun() {
                             </FormItem>
                         )}
                     />
-                    <Button type="submit" className="w-full">Submit</Button>
+                    <Button type="submit" className="w-full">Indienen</Button>
                     <div className="text-sm pb-20 text-gray-500">
                     </div>
                 </form>
@@ -127,4 +131,6 @@ export function createKasgeldRun() {
 //     }
 // }
 
-export default createKasgeldRun;
+export default function CreateKasgeldRun(props) {
+    return createKasgeldRun(props);
+}

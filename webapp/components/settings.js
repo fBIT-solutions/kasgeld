@@ -33,16 +33,16 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
     if (!session) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen py-2">
-                <h1 className="text-3xl font-bold mb-6">Please log in to access Settings</h1>
-                <p className="text-lg">You need to be logged in to view this page.</p>
+                <h1 className="text-3xl font-bold mb-6">Log in om Kasgeld te kunnen beheren</h1>
+                <p className="text-lg">Je moet ingelogd zijn om deze pagina te bekijken.</p>
             </div>
         );
     }
 
     return (
         <div className="settings-component flex flex-col items-center w-full py-2">
-            <h1 className="text-3xl font-semibold mb-6">Settings</h1>
-                <p className="text-xl font-semibold">Manage Users</p>
+            <h1 className="text-3xl font-semibold mb-6">Kasgeld Beheer</h1>
+                <p className="text-xl font-semibold">Beheer Deelnemers</p>
             <div className="flex flex-row w-full justify-between mb-2 items-center border-b-2 border-green-800 py-2">
                 <div className="flex items-center gap-2 mt-1">
                     <Select
@@ -55,7 +55,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                         }}
                     >
                         <SelectTrigger className="w-32 h-7 text-xs">
-                            <SelectValue placeholder="User" />
+                            <SelectValue placeholder="Deelnemer" />
                         </SelectTrigger>
                         <SelectContent>
                             {users?.map(u => (
@@ -67,7 +67,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                     </Select>
                 </div>
                 <Sheet>
-                    <SheetTrigger asChild className=""><Button className="text-xs">Add users</Button></SheetTrigger>
+                    <SheetTrigger asChild className=""><Button className="text-xs">Deelnemer toevoegen</Button></SheetTrigger>
                     <SheetContent className="w-full max-w-md">
                         <SignUpForm />
                     </SheetContent>
@@ -76,7 +76,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
             <KasgeldManage users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} />
             <Popover open={openUserDetails}>
                 <PopoverTrigger>
-                    {/* <Button className="text-xs">View User Details</Button> */}<span className="hidden">edit</span>
+                    {/* <Button className="text-xs">View User Details</Button> */}<span className="hidden">bewerken</span>
                 </PopoverTrigger>
                 <PopoverContent className="w-80">
                     {selectedUser && (
@@ -93,17 +93,17 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                     readOnly>
                                 </Input>
                             </Label>
-                            <Label className="text-sm">First Name:
+                            <Label className="text-sm">Voornaam:
                                 <Input className="text-sm" value={editUser.firstname}
                                     onChange={e => setEditUser({ ...editUser, firstname: e.target.value })}>
                                 </Input>
                             </Label>
-                            <Label className="text-sm">Last Name:
+                            <Label className="text-sm">Achternaam:
                                 <Input className="text-sm" value={editUser.lastname}
                                     onChange={e => setEditUser({ ...editUser, lastname: e.target.value })}>
                                 </Input>
                             </Label>
-                            <Label className="text-sm">Roles:
+                            <Label className="text-sm">Rollen:
                                 <Popover open={openRolePopover} onOpenChange={setOpenRolePopover}>
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" className="grow justify-start">
@@ -120,7 +120,6 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                                         id={role}
                                                         checked={editUser.role.includes(role)}
                                                         onCheckedChange={(checked) => {
-                                                            console.log("Checkbox checked:", checked);
                                                             const newValue = checked
                                                                 ? [...(editUser.role || []), role]
                                                                 : editUser.role?.filter((r) => r !== role);
@@ -142,13 +141,13 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                                 onClick={() => {
                                                     setOpenRolePopover(false);
                                                 }}>
-                                                Close
+                                                Sluiten
                                             </Button>
                                         </div>
                                     </PopoverContent>
                                 </Popover>
                             </Label>
-                            <Label className="text-sm">Expires:
+                            <Label className="text-sm">Verloopt:
                                 <Input className="text-sm" type="date"
                                     value={dayjs(editUser.expires).format("YYYY-MM-DD")}
                                     onChange={e => setEditUser({ ...editUser, expires: e.target.value })}>
@@ -162,7 +161,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                     setQrToken(`https://fambalker.net/guest-access?token=${userToken}`);
                                 }}
                             >
-                                Generate Login QR Code
+                                Genereer Inlog QR Code
                             </Button>
                             {qrToken && <QRCodeComponent url={qrToken} />}
                             <div className="flex flex-row justify-between items-center gap-2">
@@ -177,16 +176,16 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                             body: JSON.stringify(editUser),
                                         });
                                         if (res.ok) {
-                                            toast.success("User updated successfully!");
+                                            toast.success("Deelnemer succesvol bijgewerkt!");
                                             onChangeUsers(users.map(u => u.id === selectedUser.id ? { ...u, ...editUser } : u));
                                             setOpenUserDetails(false);
                                             setSelectedUser(null);
                                             setEditUser([]);
                                         } else {
-                                            toast.error("Failed to update user.");
+                                            toast.error("Fout bij het updaten van deelnemer.");
                                         }
                                     }}>
-                                    Save
+                                    Opslaan
                                 </Button>
                                 <Button
                                     variant="destructive"
@@ -196,16 +195,16 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                             method: "DELETE",
                                         });
                                         if (res.ok) {
-                                            toast.success("User deleted successfully!");
+                                            toast.success("Deelnemer succesvol verwijderd!");
                                             onChangeUsers(users.filter(u => u.id !== selectedUser.id));
                                             setOpenUserDetails(false);
                                             setSelectedUser(null);
                                             setEditUser([]);
                                         } else {
-                                            toast.error("Failed to delete user.");
+                                            toast.error("Fout bij het verwijderen van deelnemer.");
                                         }
                                     }}>
-                                    Delete User
+                                    Deelnemer Verwijderen
                                 </Button>
                             </div>
                         </div>

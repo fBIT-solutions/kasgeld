@@ -1,5 +1,5 @@
 "use client";
-import { React, useState } from "react";
+import { React, useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import CreateKasgeldRun from "@/components/createKasgeldRun";
@@ -26,8 +26,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Users, Zap } from "lucide-react";
+import { AlertTriangle, Users, Zap, Eye, Info } from "lucide-react";
 import dayjs from "dayjs";
+import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 
 export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns }) {
     const { data: session, status } = useSession();
@@ -38,7 +39,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
     const [editRun, setEditRun] = useState([]);
     const roles = ["default", "guest", "member", "family", "worker", "admin"];
     const [qrToken, setQrToken] = useState(null);
-    
+
     // Auto-assign states
     const [autoAssignDialogOpen, setAutoAssignDialogOpen] = useState(false);
     const [selectedUsers, setSelectedUsers] = useState([]);
@@ -46,6 +47,27 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
     const [userPreferences, setUserPreferences] = useState({});
     const [processingResultOpen, setProcessingResultOpen] = useState(false);
     const [processingResult, setProcessingResult] = useState(null);
+    const [createRunSheetOpen, setCreateRunSheetOpen] = useState(false);
+    const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
+    const [selectedReport, setSelectedReport] = useState(null);
+    const [clearAssignmentsDialogOpen, setClearAssignmentsDialogOpen] = useState(false);
+
+    // Effect to handle runs prop changes
+    useEffect(() => {
+        // If selectedRun exists but is not in the current runs array, clear it
+        if (selectedRun && runs && Array.isArray(runs)) {
+            const stillExists = runs.find(r => r.id === selectedRun.id);
+            if (!stillExists) {
+                setSelectedRun(null);
+                setEditRun([]);
+            } else {
+                // Update selectedRun and editRun with latest data
+                const updatedRun = runs.find(r => r.id === selectedRun.id);
+                setSelectedRun(updatedRun);
+                setEditRun(updatedRun);
+            }
+        }
+    }, [runs, selectedRun]);
 
 
     if (status !== "authenticated") {
@@ -70,9 +92,19 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
         return Object.values(userHandCounts).reduce((sum, count) => sum + (parseInt(count) || 0), 0);
     };
 
-    // Get total available hands
+    // Get total available hands (unassigned only)
     const getTotalAvailableHands = () => {
-        return editRun?.units?.length || 0;
+        return editRun?.units?.filter(unit => !unit.assignedTo).length || 0;
+    };
+
+    // Get total assigned hands
+    const getTotalAssignedHands = () => {
+        return editRun?.units?.filter(unit => unit.assignedTo).length || 0;
+    };
+
+    // Check if there are any assignments
+    const hasAssignments = () => {
+        return editRun?.units?.some(unit => unit.assignedTo) || false;
     };
 
     // Check if assignment is valid
@@ -83,10 +115,10 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
     // Toggle user selection
     const toggleUserSelection = (userId) => {
         setSelectedUsers(prev => {
-            const newSelection = prev.includes(userId) 
+            const newSelection = prev.includes(userId)
                 ? prev.filter(id => id !== userId)
                 : [...prev, userId];
-            
+
             // Clean up hand counts and preferences for deselected users
             if (!newSelection.includes(userId)) {
                 setUserHandCounts(prev => {
@@ -100,7 +132,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                     return newPrefs;
                 });
             }
-            
+
             return newSelection;
         });
     };
@@ -120,7 +152,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
             const newPrefs = userPrefs.includes(month)
                 ? userPrefs.filter(m => m !== month)
                 : [...userPrefs, month];
-            
+
             return {
                 ...prev,
                 [userId]: newPrefs
@@ -130,108 +162,211 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
 
     // Auto-assign algorithm
     const processAutoAssignment = () => {
-        const availableUnits = [...editRun.units];
+        const availableUnits = [...editRun.units.filter(unit => !unit.assignedTo)];
         const assignments = [];
         const conflicts = [];
         const resolutions = [];
 
-        // Group units by month
+        // Helper function to shuffle array randomly
+        const shuffleArray = (array) => {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        };
+
+        // Group units by month for easier access
         const unitsByMonth = availableUnits.reduce((acc, unit) => {
             if (!acc[unit.name]) acc[unit.name] = [];
             acc[unit.name].push(unit);
             return acc;
         }, {});
 
-        // Create assignment pools for each user
-        const userAssignmentPools = selectedUsers.map(userId => ({
+        // Create assignment pools for each user and randomize everything
+        const userAssignmentPools = shuffleArray(selectedUsers).map(userId => ({
             userId,
             requestedHands: userHandCounts[userId] || 0,
-            preferredMonths: userPreferences[userId] || [],
-            assignedUnits: []
+            preferredMonths: shuffleArray(userPreferences[userId] || []),
+            assignedUnits: [],
+            conflictedAssignments: []
         }));
 
-        // Phase 1: Assign preferred months
+        // Phase 1: Process preferences in random order
+        console.log("Phase 1: Processing preferences randomly...");
+
+        // Create a flat list of all preference requests and shuffle them
+        const allPreferenceRequests = [];
         userAssignmentPools.forEach(userPool => {
             userPool.preferredMonths.forEach(month => {
-                const availableInMonth = unitsByMonth[month]?.filter(unit => !unit.assignedTo) || [];
-                
-                while (userPool.assignedUnits.length < userPool.requestedHands && availableInMonth.length > 0) {
-                    const unit = availableInMonth.shift();
-                    unit.assignedTo = userPool.userId;
-                    userPool.assignedUnits.push(unit);
-                    assignments.push({
+                // Add multiple requests for this month based on how many hands they want
+                const handsForThisMonth = Math.min(
+                    userPool.requestedHands,
+                    Math.ceil(userPool.requestedHands / Math.max(userPool.preferredMonths.length, 1))
+                );
+                for (let i = 0; i < handsForThisMonth; i++) {
+                    allPreferenceRequests.push({
                         userId: userPool.userId,
-                        unit: unit,
-                        reason: 'Preferred month'
+                        month: month,
+                        userPool: userPool
                     });
                 }
             });
         });
 
-        // Phase 2: Handle conflicts and random assignment for remaining units
+        // Shuffle all preference requests to handle them randomly
+        const shuffledPreferences = shuffleArray(allPreferenceRequests);
+
+        // Process each preference request
+        shuffledPreferences.forEach(request => {
+            const { userId, month, userPool } = request;
+
+            // Check if user still needs more hands
+            if (userPool.assignedUnits.length >= userPool.requestedHands) {
+                return;
+            }
+
+            const availableInMonth = unitsByMonth[month]?.filter(unit =>
+                availableUnits.includes(unit) && !unit.assignedTo
+            ) || [];
+
+            if (availableInMonth.length > 0) {
+                // Randomly select a unit from available units in this month
+                const randomIndex = Math.floor(Math.random() * availableInMonth.length);
+                const unit = availableInMonth[randomIndex];
+
+                // Assign the unit
+                unit.assignedTo = userId;
+                userPool.assignedUnits.push(unit);
+
+                // Remove from available units
+                const availableIndex = availableUnits.indexOf(unit);
+                if (availableIndex > -1) {
+                    availableUnits.splice(availableIndex, 1);
+                }
+
+                // Remove from month's available units
+                const monthIndex = unitsByMonth[month].indexOf(unit);
+                if (monthIndex > -1) {
+                    unitsByMonth[month].splice(monthIndex, 1);
+                }
+
+                assignments.push({
+                    userId: userId,
+                    unit: unit,
+                    reason: 'Preferred month (random)'
+                });
+
+                console.log(`Assigned ${month} Hand ${unit.hand} to user ${userId} (preference)`);
+            } else {
+                // Mark as conflict - preferred month has no available units
+                const conflict = {
+                    userId: userId,
+                    month: month,
+                    reason: 'Preferred month unavailable'
+                };
+
+                conflicts.push(conflict);
+                userPool.conflictedAssignments.push(conflict);
+
+                console.log(`Conflict: User ${userId} wanted ${month} but no units available`);
+            }
+        });
+
+        // Phase 2: Handle remaining assignments (both conflicts and additional hands needed)
+        console.log("Phase 2: Handling conflicts and remaining assignments...");
+
+        // Collect all users who still need hands (including conflicted assignments)
+        const remainingAssignments = [];
         userAssignmentPools.forEach(userPool => {
-            const remainingNeeded = userPool.requestedHands - userPool.assignedUnits.length;
-            
-            if (remainingNeeded > 0) {
-                const allAvailableUnits = availableUnits.filter(unit => !unit.assignedTo);
-                
-                // Group remaining units by month to detect conflicts
-                const remainingByMonth = allAvailableUnits.reduce((acc, unit) => {
-                    if (!acc[unit.name]) acc[unit.name] = [];
-                    acc[unit.name].push(unit);
-                    return acc;
-                }, {});
-
-                let assigned = 0;
-                Object.entries(remainingByMonth).forEach(([month, units]) => {
-                    while (assigned < remainingNeeded && units.length > 0) {
-                        const randomIndex = Math.floor(Math.random() * units.length);
-                        const unit = units.splice(randomIndex, 1)[0];
-                        
-                        unit.assignedTo = userPool.userId;
-                        userPool.assignedUnits.push(unit);
-                        assigned++;
-                        
-                        assignments.push({
-                            userId: userPool.userId,
-                            unit: unit,
-                            reason: 'Random assignment'
-                        });
-
-                        // Check if this was a conflict resolution
-                        const conflictingUsers = userAssignmentPools.filter(pool => 
-                            pool.userId !== userPool.userId && 
-                            pool.preferredMonths.includes(month) &&
-                            pool.assignedUnits.length < pool.requestedHands
-                        );
-
-                        if (conflictingUsers.length > 0) {
-                            conflicts.push({
-                                month,
-                                conflictingUsers: conflictingUsers.map(pool => pool.userId),
-                                assignedTo: userPool.userId,
-                                unit: unit
-                            });
-                            
-                            resolutions.push({
-                                month,
-                                resolution: `Randomly assigned to ${users?.find(u => u.id === userPool.userId)?.firstname || 'Unknown'}`
-                            });
-                        }
-                    }
+            const stillNeeded = userPool.requestedHands - userPool.assignedUnits.length;
+            for (let i = 0; i < stillNeeded; i++) {
+                remainingAssignments.push({
+                    userId: userPool.userId,
+                    userPool: userPool,
+                    isConflictResolution: userPool.conflictedAssignments.length > 0
                 });
             }
         });
 
-        // Update the edit run with new assignments
-        const updatedUnits = editRun.units.map(unit => {
-            const assignment = assignments.find(a => 
-                a.unit.name === unit.name && a.unit.hand === unit.hand
-            );
-            return assignment ? { ...unit, assignedTo: assignment.userId } : unit;
+        // Shuffle remaining assignments to handle randomly
+        const shuffledRemainingAssignments = shuffleArray(remainingAssignments);
+
+        // Randomly assign remaining units
+        shuffledRemainingAssignments.forEach(assignment => {
+            const { userId, userPool, isConflictResolution } = assignment;
+
+            if (availableUnits.length > 0 && userPool.assignedUnits.length < userPool.requestedHands) {
+                // Randomly select any available unit
+                const randomIndex = Math.floor(Math.random() * availableUnits.length);
+                const unit = availableUnits.splice(randomIndex, 1)[0];
+
+                unit.assignedTo = userId;
+                userPool.assignedUnits.push(unit);
+
+                const reason = isConflictResolution ? 'Conflict resolution (random)' : 'Random assignment';
+                assignments.push({
+                    userId: userId,
+                    unit: unit,
+                    reason: reason
+                });
+
+                console.log(`Assigned ${unit.name} Hand ${unit.hand} to user ${userId} (${reason.toLowerCase()})`);
+
+                // Add to resolutions if this was a conflict resolution
+                if (isConflictResolution) {
+                    resolutions.push({
+                        month: unit.name,
+                        resolution: `Randomly assigned to ${users?.find(u => u.id === userId)?.firstname || 'Unknown'} (conflict resolution)`
+                    });
+                }
+            }
         });
 
-        setEditRun({ ...editRun, units: updatedUnits });
+        // Update the edit run with new assignments and mark auto-assigned units
+        const updatedUnits = editRun.units.map(unit => {
+            const assignment = assignments.find(a =>
+                a.unit.name === unit.name && a.unit.hand === unit.hand
+            );
+            return assignment ? {
+                ...unit,
+                assignedTo: assignment.userId,
+                autoAssigned: true,
+                autoAssignReason: assignment.reason
+            } : unit;
+        });
+
+        // Store the auto-assign report in the run object
+        const autoAssignReport = {
+            timestamp: new Date().toISOString(),
+            assignments: assignments.map(a => ({
+                userName: users?.find(u => u.id === a.userId)?.firstname || 'Unknown',
+                month: a.unit.name,
+                hand: a.unit.hand,
+                reason: a.reason
+            })),
+            conflicts: conflicts.map(c => ({
+                userName: users?.find(u => u.id === c.userId)?.firstname || 'Unknown',
+                month: c.month,
+                reason: c.reason
+            })),
+            resolutions,
+            summary: {
+                totalAssigned: assignments.length,
+                totalConflicts: conflicts.length,
+                usersProcessed: selectedUsers.length,
+                conflictsResolved: resolutions.length
+            }
+        };
+
+        const updatedEditRun = {
+            ...editRun,
+            units: updatedUnits,
+            autoAssignReports: [...(editRun.autoAssignReports || []), autoAssignReport]
+        };
+
+        setEditRun(updatedEditRun);
 
         // Prepare result summary
         const result = {
@@ -241,15 +376,21 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                 hand: a.unit.hand,
                 reason: a.reason
             })),
-            conflicts,
+            conflicts: conflicts.map(c => ({
+                userName: users?.find(u => u.id === c.userId)?.firstname || 'Unknown',
+                month: c.month,
+                reason: c.reason
+            })),
             resolutions,
             summary: {
                 totalAssigned: assignments.length,
                 totalConflicts: conflicts.length,
-                usersProcessed: selectedUsers.length
+                usersProcessed: selectedUsers.length,
+                conflictsResolved: resolutions.length
             }
         };
 
+        // console.log("Assignment completed:", result);
         setProcessingResult(result);
         setAutoAssignDialogOpen(false);
         setProcessingResultOpen(true);
@@ -260,6 +401,25 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
         setSelectedUsers([]);
         setUserHandCounts({});
         setUserPreferences({});
+    };
+
+    // Clear all assignments
+    const clearAllAssignments = () => {
+        const clearedUnits = editRun.units.map(unit => ({
+            ...unit,
+            assignedTo: null,
+            autoAssigned: undefined,
+            autoAssignReason: undefined
+        }));
+
+        const updatedEditRun = {
+            ...editRun,
+            units: clearedUnits
+        };
+
+        setEditRun(updatedEditRun);
+        setClearAssignmentsDialogOpen(false);
+        toast.success("All assignments cleared!");
     };
 
     return (
@@ -289,10 +449,15 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                         </SelectContent>
                     </Select>
                 </div>
-                <Sheet>
+                <Sheet open={createRunSheetOpen} onOpenChange={setCreateRunSheetOpen}>
                     <SheetTrigger asChild className=""><Button className="text-xs">Kasgeld toevoegen</Button></SheetTrigger>
                     <SheetContent className="w-full max-w-md">
-                        <CreateKasgeldRun />
+                        <CreateKasgeldRun onSuccess={(newRun) => {
+                            onChangeRuns([...runs, newRun]);
+                            setSelectedRun(newRun);
+                            setEditRun(newRun);
+                            setCreateRunSheetOpen(false);
+                        }} />
                     </SheetContent>
                 </Sheet>
             </div>
@@ -346,20 +511,47 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                             {editRun?.units?.length > 0 && (
                                 <div className="flex-1 flex flex-col">
                                     <div className="flex justify-between items-center mb-3">
-                                        <p className="font-semibold">Transacties:</p>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                resetAutoAssignState();
-                                                setAutoAssignDialogOpen(true);
-                                            }}
-                                            className="text-xs"
-                                        >
-                                            <Zap className="h-3 w-3 mr-1" />
-                                            Auto Assign
-                                        </Button>
+                                        <div className="flex gap-2">
+                                            {editRun?.autoAssignReports?.length > 0 && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setSelectedReport(editRun.autoAssignReports[editRun.autoAssignReports.length - 1]);
+                                                        setViewReportDialogOpen(true);
+                                                    }}
+                                                    className="text-xs"
+                                                >
+                                                    <Eye className="h-3 w-3 mr-1" />
+                                                    Reports ({editRun.autoAssignReports.length})
+                                                </Button>
+                                            )}
+                                            {hasAssignments() && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => setClearAssignmentsDialogOpen(true)}
+                                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                >
+                                                    Clear All
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    resetAutoAssignState();
+                                                    setAutoAssignDialogOpen(true);
+                                                }}
+                                                className="text-xs"
+                                                disabled={getTotalAvailableHands() === 0}
+                                            >
+                                                <Zap className="h-3 w-3 mr-1" />
+                                                {hasAssignments() ? "Auto Assign (open)" : "Auto Assign"}
+                                            </Button>
+                                        </div>
                                     </div>
+                                    <p className="font-semibold">Transacties:</p>
                                     <ScrollArea className="flex-1 max-h-100 w-80 mx-auto p-2 border rounded overflow-y-auto">
                                         <div className="space-y-4 pr-4 max-h-[350px]">
                                             {Object.entries(
@@ -376,7 +568,14 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                                     <div className="space-y-3">
                                                         {monthUnits.map((unit, index) => (
                                                             <div key={unit.name + unit.hand} className="flex text-xs items-center gap-3">
-                                                                <span className="min-w-[80px] font-medium">Hand {unit.hand}:</span>
+                                                                <span className="min-w-[80px] font-medium flex items-center gap-1">
+                                                                    Hand {unit.hand}:
+                                                                    {unit.autoAssigned && (
+                                                                        <span className="text-blue-600 text-xs" title={`Auto-assigned: ${unit.autoAssignReason}`}>
+                                                                            🤖
+                                                                        </span>
+                                                                    )}
+                                                                </span>
                                                                 <Select
                                                                     value={unit.assignedTo || "unassigned"}
                                                                     onValueChange={(userId) => {
@@ -465,29 +664,57 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                     <DialogHeader className="flex-shrink-0">
                         <DialogTitle className="flex items-center gap-2">
                             <Users className="h-5 w-5" />
-                            Auto Assign Users
+                            Automatisch toewijzen
                         </DialogTitle>
                         <DialogDescription>
-                            Select users and configure their assignments for automatic allocation.
+                            Selecteer deelnemers om handen aan toe te wijzen.
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <Info className="inline-block h-4 w-4 ml-1 text-muted-foreground" />
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs">
+                                    <p className="text-xs">
+                                        Specificeer hoeveel handen elke deelnemer wil en hun voorkeursmaanden. Het systeem zal proberen om de voorkeuren te respecteren, maar kan ook willekeurig toewijzen indien nodig.
+                                        Handen die al zijn toegewezen blijven ongewijzigd. Automatisch toewijzen werkt alleen met de resterende beschikbare handen.
+                                    </p>
+                                </TooltipContent>
+                            </Tooltip>
                         </DialogDescription>
                     </DialogHeader>
-                    
+
                     <div className="flex flex-col flex-1 min-h-0 space-y-4">
                         {/* Summary - Fixed section */}
-                        <div className="flex-shrink-0 grid grid-cols-3 gap-4 text-sm">
-                            <div className="text-center p-2 bg-gray-50 rounded">
-                                <div className="font-semibold">{getTotalAvailableHands()}</div>
-                                <div className="text-muted-foreground">Available Hands</div>
-                            </div>
-                            <div className="text-center p-2 bg-gray-50 rounded">
-                                <div className="font-semibold">{getTotalHandsRequested()}</div>
-                                <div className="text-muted-foreground">Requested Hands</div>
-                            </div>
-                            <div className="text-center p-2 bg-gray-50 rounded">
-                                <div className={`font-semibold ${isAssignmentValid() ? 'text-green-600' : 'text-red-600'}`}>
-                                    {getTotalAvailableHands() - getTotalHandsRequested()}
+                        <div className="flex-shrink-0 space-y-3">
+                            {/* Assignment Status */}
+                            {hasAssignments() && (
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div className="text-center p-2 bg-blue-50 border border-blue-200 rounded">
+                                        <div className="font-semibold text-blue-800">{getTotalAssignedHands()}</div>
+                                        <div className="text-blue-600 text-xs">Toegewezen</div>
+                                    </div>
+                                    <div className="text-center p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                        <div className="font-semibold text-yellow-800">{getTotalAvailableHands()}</div>
+                                        <div className="text-yellow-600 text-xs">Beschikbaar</div>
+                                    </div>
                                 </div>
-                                <div className="text-muted-foreground">Remaining</div>
+                            )}
+
+                            {/* Request Summary */}
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div className="text-center p-2 bg-gray-50 rounded">
+                                    <div className="font-semibold">{getTotalAvailableHands()}</div>
+                                    <div className="text-xs text-muted-foreground">Beschikbaar</div>
+                                </div>
+                                <div className="text-center p-2 bg-gray-50 rounded">
+                                    <div className="font-semibold">{getTotalHandsRequested()}</div>
+                                    <div className="text-xs text-muted-foreground">Gevraagde Handen</div>
+                                </div>
+                                <div className="text-center p-2 bg-gray-50 rounded">
+                                    <div className={`font-semibold ${isAssignmentValid() ? 'text-green-600' : 'text-red-600'}`}>
+                                        {getTotalAvailableHands() - getTotalHandsRequested()}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">Nog beschikbaar</div>
+                                </div>
                             </div>
                         </div>
 
@@ -495,7 +722,15 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                         {!isAssignmentValid() && getTotalHandsRequested() > getTotalAvailableHands() && (
                             <div className="flex-shrink-0 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded text-red-800">
                                 <AlertTriangle className="h-4 w-4" />
-                                <span className="text-sm">Too many hands selected. Please reduce the requested hands.</span>
+                                <span className="text-sm">Te veel handen geselecteerd, pas de toewijzing aan</span>
+                            </div>
+                        )}
+
+                        {/* Info message for existing assignments */}
+                        {hasAssignments() && (
+                            <div className="flex-shrink-0 flex items-center gap-2 p-1 bg-blue-50 border border-blue-200 rounded text-blue-800">
+                                <Users className="h-4 w-4" />
+                                <span className="text-xs">Sommige eenheden zijn al toegewezen. Automatisch toewijzen werkt alleen met de resterende {getTotalAvailableHands()} beschikbare handen.</span>
                             </div>
                         )}
 
@@ -513,7 +748,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                                     />
                                                     <span className="font-medium">{user.firstname}</span>
                                                 </div>
-                                                
+
                                                 {selectedUsers.includes(user.id) && (
                                                     <div className="ml-6 space-y-3">
                                                         <div>
@@ -527,7 +762,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                                                 className="w-20 text-sm"
                                                             />
                                                         </div>
-                                                        
+
                                                         <div>
                                                             <Label className="text-sm">Preferred months:</Label>
                                                             <div className="flex flex-wrap gap-2 mt-1">
@@ -551,16 +786,16 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                 </ScrollArea>
                             </div>
                         </div>
-                        
+
                         {/* Fixed buttons at bottom */}
                         <div className="flex-shrink-0 flex justify-end gap-2 pt-4 border-t">
-                            <Button 
-                                variant="outline" 
+                            <Button
+                                variant="outline"
                                 onClick={() => setAutoAssignDialogOpen(false)}
                             >
                                 Cancel
                             </Button>
-                            <Button 
+                            <Button
                                 onClick={processAutoAssignment}
                                 disabled={!isAssignmentValid()}
                             >
@@ -580,7 +815,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                             Overview of the auto-assignment process and any conflicts resolved.
                         </DialogDescription>
                     </DialogHeader>
-                    
+
                     {processingResult && (
                         <ScrollArea className="max-h-[500px]">
                             <div className="space-y-4">
@@ -618,19 +853,33 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                 {/* Conflicts */}
                                 {processingResult.conflicts.length > 0 && (
                                     <div>
-                                        <h4 className="font-semibold mb-2 text-orange-800">Conflicts & Resolutions:</h4>
+                                        <h4 className="font-semibold mb-2 text-orange-800">Conflicts Detected:</h4>
+                                        <div className="space-y-2">
+                                            {processingResult.conflicts.map((conflict, index) => (
+                                                <div key={index} className="text-sm p-2 bg-red-50 border border-red-200 rounded">
+                                                    <strong>{conflict.userName}</strong> wanted {conflict.month} but no units were available
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Resolutions */}
+                                {processingResult.resolutions.length > 0 && (
+                                    <div>
+                                        <h4 className="font-semibold mb-2 text-blue-800">Conflict Resolutions:</h4>
                                         <div className="space-y-2">
                                             {processingResult.resolutions.map((resolution, index) => (
-                                                <div key={index} className="text-sm p-2 bg-orange-50 border border-orange-200 rounded">
+                                                <div key={index} className="text-sm p-2 bg-blue-50 border border-blue-200 rounded">
                                                     <strong>{resolution.month}:</strong> {resolution.resolution}
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
                                 )}
-                                
+
                                 <div className="pt-4 border-t">
-                                    <Button 
+                                    <Button
                                         onClick={() => setProcessingResultOpen(false)}
                                         className="w-full"
                                     >
@@ -640,6 +889,135 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                             </div>
                         </ScrollArea>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* View Stored Report Dialog */}
+            <Dialog open={viewReportDialogOpen} onOpenChange={setViewReportDialogOpen}>
+                <DialogContent className="sm:max-w-[700px] max-h-[80vh]">
+                    <DialogHeader>
+                        <DialogTitle>Auto-Assignment Report</DialogTitle>
+                        <DialogDescription>
+                            {selectedReport && (
+                                <span>Generated on {new Date(selectedReport.timestamp).toLocaleString()}</span>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedReport && (
+                        <ScrollArea className="max-h-[500px]">
+                            <div className="space-y-4">
+                                {/* Summary */}
+                                <div className="grid grid-cols-3 gap-4 text-sm">
+                                    <div className="text-center p-3 bg-green-50 border border-green-200 rounded">
+                                        <div className="font-semibold text-green-800">{selectedReport.summary.totalAssigned}</div>
+                                        <div className="text-green-600">Units Assigned</div>
+                                    </div>
+                                    <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded">
+                                        <div className="font-semibold text-blue-800">{selectedReport.summary.usersProcessed}</div>
+                                        <div className="text-blue-600">Users Processed</div>
+                                    </div>
+                                    <div className="text-center p-3 bg-orange-50 border border-orange-200 rounded">
+                                        <div className="font-semibold text-orange-800">{selectedReport.summary.totalConflicts}</div>
+                                        <div className="text-orange-600">Conflicts Detected</div>
+                                    </div>
+                                </div>
+
+                                {/* Assignments */}
+                                <div>
+                                    <h4 className="font-semibold mb-2">Assignments Made:</h4>
+                                    <div className="space-y-1">
+                                        {selectedReport.assignments.map((assignment, index) => (
+                                            <div key={index} className="text-sm p-2 bg-gray-50 rounded flex justify-between">
+                                                <span>{assignment.userName} → {assignment.month} Hand {assignment.hand}</span>
+                                                <Badge variant="outline" className="text-xs">
+                                                    {assignment.reason}
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Conflicts */}
+                                {selectedReport.conflicts.length > 0 && (
+                                    <div>
+                                        <h4 className="font-semibold mb-2 text-orange-800">Conflicts Detected:</h4>
+                                        <div className="space-y-2">
+                                            {selectedReport.conflicts.map((conflict, index) => (
+                                                <div key={index} className="text-sm p-2 bg-red-50 border border-red-200 rounded">
+                                                    <strong>{conflict.userName}</strong> wanted {conflict.month} but no units were available
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Resolutions */}
+                                {selectedReport.resolutions.length > 0 && (
+                                    <div>
+                                        <h4 className="font-semibold mb-2 text-blue-800">Conflict Resolutions:</h4>
+                                        <div className="space-y-2">
+                                            {selectedReport.resolutions.map((resolution, index) => (
+                                                <div key={index} className="text-sm p-2 bg-blue-50 border border-blue-200 rounded">
+                                                    <strong>{resolution.month}:</strong> {resolution.resolution}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="pt-4 border-t">
+                                    <Button
+                                        onClick={() => setViewReportDialogOpen(false)}
+                                        className="w-full"
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </div>
+                        </ScrollArea>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Clear Assignments Confirmation Dialog */}
+            <Dialog open={clearAssignmentsDialogOpen} onOpenChange={setClearAssignmentsDialogOpen}>
+                <DialogContent className="sm:max-w-[400px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-red-600" />
+                            Clear All Assignments
+                        </DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to clear all user assignments? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
+                            <strong>This will:</strong>
+                            <ul className="mt-2 space-y-1 list-disc list-inside">
+                                <li>Remove all user assignments from units</li>
+                                <li>Clear auto-assignment markers</li>
+                                <li>Keep the auto-assignment reports for reference</li>
+                            </ul>
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => setClearAssignmentsDialogOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={clearAllAssignments}
+                            >
+                                Clear All Assignments
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

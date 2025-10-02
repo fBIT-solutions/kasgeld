@@ -248,7 +248,7 @@ return (
                                         className="w-full"
                                         variant="outline"
                                     >
-                                        Request Swap
+                                        Ruil verzoek versturen
                                     </Button>
                                 </div>
                             )}
@@ -262,26 +262,26 @@ return (
         <Dialog open={swapDialogOpen} onOpenChange={setSwapDialogOpen}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>Request Swap</DialogTitle>
+                    <DialogTitle>Ruil verzoek</DialogTitle>
                     <DialogDescription>
-                        Request to swap your assigned unit with {selectedEvent?.assignedTo}
+                        Vraag om jouw hand te ruilen met {selectedEvent?.assignedTo}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
-                        <Label>Target Unit</Label>
+                        <Label>Doel hand</Label>
                         <div className="p-3 bg-gray-50 rounded">
                             <strong>{selectedEvent?.unitName}</strong> - Hand {selectedEvent?.hand}
                             <br />
-                            <small>Assigned to: {selectedEvent?.assignedTo}</small>
+                            <small>Toegewezen aan: {selectedEvent?.assignedTo}</small>
                         </div>
                     </div>
                     
                     <div className="space-y-2">
-                        <Label htmlFor="userUnit">Your Unit to Swap</Label>
+                        <Label htmlFor="userUnit">Jouw hand om te ruilen</Label>
                         <Select value={selectedUserUnit} onValueChange={setSelectedUserUnit}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Select one of your assigned units" />
+                                <SelectValue placeholder="Selecteer een van jouw toegewezen handen" />
                             </SelectTrigger>
                             <SelectContent>
                                 {userUnits.map(unit => (
@@ -293,16 +293,16 @@ return (
                         </Select>
                         {userUnits.length === 0 && (
                             <p className="text-sm text-muted-foreground">
-                                You don't have any assigned units to swap
+                                Je hebt geen toegewezen handen om te ruilen
                             </p>
                         )}
                     </div>
                     
                     <div className="space-y-2">
-                        <Label htmlFor="note">Note (Optional)</Label>
+                        <Label htmlFor="note">Opmerking (Optioneel)</Label>
                         <Textarea
                             id="note"
-                            placeholder="Add a note explaining why you want to swap..."
+                            placeholder="Voeg een opmerking toe m.b.t jouw verzoek toe."
                             value={swapNote}
                             onChange={(e) => setSwapNote(e.target.value)}
                         />
@@ -313,13 +313,13 @@ return (
                             variant="outline" 
                             onClick={() => setSwapDialogOpen(false)}
                         >
-                            Cancel
+                            Annuleren
                         </Button>
                         <Button 
                             onClick={handleSwapRequest}
                             disabled={!selectedUserUnit || userUnits.length === 0}
                         >
-                            Send Request
+                            Versturen
                         </Button>
                     </div>
                 </div>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import React, { useEffect, useState } from "react";
 import SwapRequests from "@/components/swapRequests";
+import NextUnitTransaction from "@/components/nextUnitTransaction";
 
 import { SignInForm } from "@/components/signin_form";
 import Settings from "@/components/settings";
@@ -45,10 +46,18 @@ export default function Home() {
 
     const components = [
         {
-            title: "Settings",
+            title: "Volgende Transactie",
+            href: "/next-transaction",
+            description:
+                "Je volgende geplande kasgeld transactie.",
+            element: ({ users, runs, onChangeUsers, onChangeRuns }) => <NextUnitTransaction users={users} runs={runs} />,
+            roles: ["member", "admin", "family"],
+        },
+        {
+            title: "Beheer",
             href: "/settings",
             description:
-                "Manage your family members, guests and workers.",
+                "Beheer Kasgeld runs en leden.",
             element: ({ users, runs, onChangeUsers, onChangeRuns }) => <Settings users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} className="" />,
             roles: ["admin"],
         },
@@ -56,15 +65,15 @@ export default function Home() {
             title: "Kalender",
             href: "/events",
             description:
-                "Kasgeld Runs",
+                "Kasgeld kalender met alle transacties.",
             element: ({ users, runs, onChangeUsers, onChangeRuns }) => <EventsPage users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} className="" />,
             roles: ["member", "admin", "family"],
         },
         {
-            title: "Swap Requests",
+            title: "Ruil Verzoeken",
             href: "/swaps",
             description:
-                "Manage your kasgeld swap requests",
+                "Beheer je kasgeld ruilverzoeken.",
             element: ({ users, runs, onChangeUsers, onChangeRuns }) => <SwapRequests users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} className="" />,
             roles: ["member", "admin", "family"],
         },
@@ -75,8 +84,7 @@ export default function Home() {
         <main className="w-full min-h-screen h-screen">
             <div className="p-6">
                 <div className="">
-                    <h1 className="p-2 text-center text-3xl font-bold">Welcome @ Mavis Balker Kasgeld</h1>
-                    {/* <p className="p-2 text-center text-base text-green-800/50">Our one-stop solution for family management.</p> */}
+                    <h1 className="p-2 text-center text-3xl font-bold">Welkom @ Mavis Balker Kasgeld</h1>
                 </div>
                 <div className="mt-2">
                     {(status === "authenticated") && (
@@ -87,14 +95,15 @@ export default function Home() {
                                 <div key={component.title}>
                                     {component.roles.some(role => session.user.role.includes(role)) ? (
                                         component.element ? (
-                                            component.element({ users, runs, onChangeUsers: setUsers, onChangeRuns: setRuns })
+                                            <div key={`${component.title}-${runs.length}`}>
+                                                {component.element({ users, runs, onChangeUsers: setUsers, onChangeRuns: setRuns })}
+                                            </div>
                                         ) : (
                                             router.push(component.href)
                                         )
                                         // <{component.element} className="w-80"/>
                                     ) : (
                                         <div className="text-red-500">
-                                            You do not have access to this component.
                                         </div>
                                     )}
                                 </div>
