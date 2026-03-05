@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import React, { useEffect, useState } from "react";
 import SwapRequests from "@/components/swapRequests";
 import NextUnitTransaction from "@/components/nextUnitTransaction";
+import { UserMenu } from "@/components/user-menu";
 
 import { SignInForm } from "@/components/signin_form";
 import Settings from "@/components/settings";
@@ -83,8 +84,9 @@ export default function Home() {
     return (
         <main className="w-full min-h-screen h-screen">
             <div className="p-6">
-                <div className="">
-                    <h1 className="p-2 text-center text-3xl font-bold">Welkom @ Mavis Balker Kasgeld</h1>
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold">Welkom @ Mavis Balker Kasgeld</h1>
+                    {status === "authenticated" && <UserMenu />}
                 </div>
                 <div className="mt-2">
                     {(status === "authenticated") && (
