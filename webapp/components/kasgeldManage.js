@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import CreateKasgeldRun from "@/components/createKasgeldRun";
+import PaymentTracker from "@/components/PaymentTracker";
 import {
     Sheet,
     SheetTrigger,
@@ -18,6 +19,12 @@ import { Label } from "./ui/label";
 import { toast } from "sonner";
 import { Separator } from "./ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Accordion,
+    AccordionItem,
+    AccordionTrigger,
+    AccordionContent,
+} from "@/components/ui/accordion";
 import {
     Dialog,
     DialogContent,
@@ -484,148 +491,174 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                     </SheetHeader>
 
                     {selectedRun && (
-                        <div className="flex flex-col gap-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label className="text-sm">Jaar:</Label>
-                                    <Input className="text-sm" value={selectedRun.year} readOnly />
-                                </div>
-                                <div>
-                                    <Label className="text-sm">Beschikbare Handen:</Label>
-                                    <Input
-                                        className="text-sm"
-                                        value={editRun.unitsAvailable}
-                                        onChange={e => setEditRun({ ...editRun, unitsAvailable: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-sm">Start:</Label>
-                                    <Input
-                                        className="text-sm"
-                                        type="date"
-                                        value={dayjs(editRun.start).format("YYYY-MM-DD")}
-                                        onChange={e => setEditRun({ ...editRun, start: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label className="text-sm">Eind:</Label>
-                                    <Input
-                                        className="text-sm"
-                                        type="date"
-                                        value={dayjs(editRun.end).format("YYYY-MM-DD")}
-                                        onChange={e => setEditRun({ ...editRun, end: e.target.value })}
-                                    />
-                                </div>
-                            </div>
+                        <ScrollArea className="flex-1 pr-4">
+                            <div className="flex flex-col gap-4 pr-4">
+                                <Accordion type="single" collapsible defaultValue="basisinformatie" className="w-full">
+                                    {/* Basisinformatie Section */}
+                                    <AccordionItem value="basisinformatie">
+                                        <AccordionTrigger className="text-sm font-semibold">
+                                            Basisinformatie
+                                        </AccordionTrigger>
+                                        <AccordionContent className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <Label className="text-sm">Jaar:</Label>
+                                                    <Input className="text-sm" value={selectedRun.year} readOnly />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-sm">Beschikbare Handen:</Label>
+                                                    <Input
+                                                        className="text-sm"
+                                                        value={editRun.unitsAvailable}
+                                                        onChange={e => setEditRun({ ...editRun, unitsAvailable: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-sm">Start:</Label>
+                                                    <Input
+                                                        className="text-sm"
+                                                        type="date"
+                                                        value={dayjs(editRun.start).format("YYYY-MM-DD")}
+                                                        onChange={e => setEditRun({ ...editRun, start: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label className="text-sm">Eind:</Label>
+                                                    <Input
+                                                        className="text-sm"
+                                                        type="date"
+                                                        value={dayjs(editRun.end).format("YYYY-MM-DD")}
+                                                        onChange={e => setEditRun({ ...editRun, end: e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </AccordionContent>
+                                    </AccordionItem>
 
-                            {editRun?.units?.length > 0 && (
-                                <div className="flex-1 flex flex-col">
-                                    <div className="flex justify-between items-center mb-3">
-                                        <div className="flex gap-2">
-                                            {editRun?.autoAssignReports?.length > 0 && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => {
-                                                        setSelectedReport(editRun.autoAssignReports[editRun.autoAssignReports.length - 1]);
-                                                        setViewReportDialogOpen(true);
-                                                    }}
-                                                    className="text-xs"
-                                                >
-                                                    <Eye className="h-3 w-3 mr-1" />
-                                                    Reports ({editRun.autoAssignReports.length})
-                                                </Button>
-                                            )}
-                                            {hasAssignments() && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => setClearAssignmentsDialogOpen(true)}
-                                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                >
-                                                    Clear All
-                                                </Button>
-                                            )}
-                                            <Button
-                                                size="sm"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    resetAutoAssignState();
-                                                    setAutoAssignDialogOpen(true);
-                                                }}
-                                                className="text-xs"
-                                                disabled={getTotalAvailableHands() === 0}
-                                            >
-                                                <Zap className="h-3 w-3 mr-1" />
-                                                {hasAssignments() ? "Auto Assign (open)" : "Auto Assign"}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                    <p className="font-semibold">Transacties:</p>
-                                    <ScrollArea className="flex-1 max-h-100 w-80 mx-auto p-2 border rounded overflow-y-auto">
-                                        <div className="space-y-4 pr-4 max-h-[350px]">
-                                            {Object.entries(
-                                                editRun.units.reduce((groups, unit) => {
-                                                    if (!groups[unit.name]) {
-                                                        groups[unit.name] = [];
-                                                    }
-                                                    groups[unit.name].push(unit);
-                                                    return groups;
-                                                }, {})
-                                            ).map(([monthName, monthUnits]) => (
-                                                <div key={monthName} className="">
-                                                    <p className="font-medium text-sm mb-3">{monthName}</p>
-                                                    <div className="space-y-3">
-                                                        {monthUnits.map((unit, index) => (
-                                                            <div key={unit.name + unit.hand} className="flex text-xs items-center gap-3">
-                                                                <span className="min-w-[80px] font-medium flex items-center gap-1">
-                                                                    Hand {unit.hand}:
-                                                                    {unit.autoAssigned && (
-                                                                        <span className="text-blue-600 text-xs" title={`Auto-assigned: ${unit.autoAssignReason}`}>
-                                                                            🤖
-                                                                        </span>
-                                                                    )}
-                                                                </span>
-                                                                <Select
-                                                                    value={unit.assignedTo || "unassigned"}
-                                                                    onValueChange={(userId) => {
-                                                                        const updatedUnits = editRun.units.map(u =>
-                                                                            u.name === unit.name && u.hand === unit.hand
-                                                                                ? { ...u, assignedTo: userId === "unassigned" ? null : userId }
-                                                                                : u
-                                                                        );
-                                                                        setEditRun({ ...editRun, units: updatedUnits });
-                                                                    }}
-                                                                >
-                                                                    <SelectTrigger className="flex-1">
-                                                                        <SelectValue placeholder="Select user" />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        <SelectItem value="unassigned">Not assigned</SelectItem>
-                                                                        {users?.map(user => {
-                                                                            const displayName = isAdmin 
-                                                                                ? [user.firstname, user.lastname].filter(Boolean).join(' ') || user.displayname
-                                                                                : user.firstname;
-                                                                            return (
-                                                                                <SelectItem key={user.id} value={user.id}>
-                                                                                    {displayName}
-                                                                                </SelectItem>
-                                                                            );
-                                                                        })}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </div>
-                                                        ))}
-                                                        <Separator className="my-2" />
+                                    {/* Betalingen Beheren Section */}
+                                    <AccordionItem value="betalingen">
+                                        <AccordionTrigger className="text-sm font-semibold">
+                                            Betalingen Beheren
+                                        </AccordionTrigger>
+                                        <AccordionContent className="space-y-4">
+                                            <PaymentTracker run={editRun} users={users} />
+                                        </AccordionContent>
+                                    </AccordionItem>
+
+                                    {/* Transacties Section */}
+                                    {editRun?.units?.length > 0 && (
+                                        <AccordionItem value="transacties">
+                                            <AccordionTrigger className="text-sm font-semibold">
+                                                Transacties ({editRun.units.length})
+                                            </AccordionTrigger>
+                                            <AccordionContent className="space-y-4">
+                                                <div className="flex justify-between items-center mb-3">
+                                                    <div className="flex gap-2">
+                                                        {editRun?.autoAssignReports?.length > 0 && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => {
+                                                                    setSelectedReport(editRun.autoAssignReports[editRun.autoAssignReports.length - 1]);
+                                                                    setViewReportDialogOpen(true);
+                                                                }}
+                                                                className="text-xs"
+                                                            >
+                                                                <Eye className="h-3 w-3 mr-1" />
+                                                                Reports ({editRun.autoAssignReports.length})
+                                                            </Button>
+                                                        )}
+                                                        {hasAssignments() && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setClearAssignmentsDialogOpen(true)}
+                                                                className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                                            >
+                                                                Clear All
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                resetAutoAssignState();
+                                                                setAutoAssignDialogOpen(true);
+                                                            }}
+                                                            className="text-xs"
+                                                            disabled={getTotalAvailableHands() === 0}
+                                                        >
+                                                            <Zap className="h-3 w-3 mr-1" />
+                                                            {hasAssignments() ? "Auto Assign (open)" : "Auto Assign"}
+                                                        </Button>
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
-                                </div>
-                            )}
+                                                <ScrollArea className="flex-1 max-h-100 w-full p-2 border rounded overflow-y-auto">
+                                                    <div className="space-y-4 pr-4 max-h-[350px]">
+                                                        {Object.entries(
+                                                            editRun.units.reduce((groups, unit) => {
+                                                                if (!groups[unit.name]) {
+                                                                    groups[unit.name] = [];
+                                                                }
+                                                                groups[unit.name].push(unit);
+                                                                return groups;
+                                                            }, {})
+                                                        ).map(([monthName, monthUnits]) => (
+                                                            <div key={monthName} className="">
+                                                                <p className="font-medium text-sm mb-3">{monthName}</p>
+                                                                <div className="space-y-3">
+                                                                    {monthUnits.map((unit, index) => (
+                                                                        <div key={unit.name + unit.hand} className="flex text-xs items-center gap-3">
+                                                                            <span className="min-w-[80px] font-medium flex items-center gap-1">
+                                                                                Hand {unit.hand}:
+                                                                                {unit.autoAssigned && (
+                                                                                    <span className="text-blue-600 text-xs" title={`Auto-assigned: ${unit.autoAssignReason}`}>
+                                                                                        🤖
+                                                                                    </span>
+                                                                                )}
+                                                                            </span>
+                                                                            <Select
+                                                                                value={unit.assignedTo || "unassigned"}
+                                                                                onValueChange={(userId) => {
+                                                                                    const updatedUnits = editRun.units.map(u =>
+                                                                                        u.name === unit.name && u.hand === unit.hand
+                                                                                            ? { ...u, assignedTo: userId === "unassigned" ? null : userId }
+                                                                                            : u
+                                                                                    );
+                                                                                    setEditRun({ ...editRun, units: updatedUnits });
+                                                                                }}
+                                                                            >
+                                                                                <SelectTrigger className="flex-1">
+                                                                                    <SelectValue placeholder="Select user" />
+                                                                                </SelectTrigger>
+                                                                                <SelectContent>
+                                                                                    <SelectItem value="unassigned">Not assigned</SelectItem>
+                                                                                    {users?.map(user => {
+                                                                                        const displayName = isAdmin 
+                                                                                            ? [user.firstname, user.lastname].filter(Boolean).join(' ') || user.displayname
+                                                                                            : user.firstname;
+                                                                                        return (
+                                                                                            <SelectItem key={user.id} value={user.id}>
+                                                                                                {displayName}
+                                                                                            </SelectItem>
+                                                                                        );
+                                                                                    })}
+                                                                                </SelectContent>
+                                                                            </Select>
+                                                                        </div>
+                                                                    ))}
+                                                                    <Separator className="my-2" />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </ScrollArea>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    )}
+                                </Accordion>
 
-                            <div className="flex justify-between items-center gap-4 pt-4 border-t">
+                                <div className="flex justify-between items-center gap-4 pt-4 border-t">
                                 <Button
                                     onClick={async () => {
                                         const res = await fetch(`/api/runs`, {
@@ -669,6 +702,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                 </Button>
                             </div>
                         </div>
+                            </ScrollArea>
                     )}
                 </SheetContent>
             </Sheet>
