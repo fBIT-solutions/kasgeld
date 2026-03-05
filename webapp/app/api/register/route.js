@@ -25,6 +25,7 @@ export async function POST(req)  {
     email,
     firstname: data.firstname || "",
     lastname: data.lastname || "",
+    displayname: data.displayname || "",
     password: hashed,
     createdAt: new Date().toISOString(),
     role: data.role || ["default"],

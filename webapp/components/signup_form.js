@@ -37,7 +37,7 @@ export function SignUpForm() {
             displayname: values.displayname,
             lastname: values.lastname,
             password: values.password,
-            role: ["guest", "default"],
+            role: values.role,
             expires: values.expires ? new Date(values.expires).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Default to 7 days if not provided
         };
 
