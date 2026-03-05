@@ -11,6 +11,8 @@ import { signIn, useSession } from "next-auth/react";
 
 
 export function SignInForm() {
+    const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
 
     const form = useForm({
         defaultValues: {
@@ -20,19 +22,48 @@ export function SignInForm() {
     });
 
     async function onSubmit(values) {
+        setIsLoading(true);
 
-        const res = await signIn("credentials", {
-            email: values.email,
-            password: values.password,
-            redirect: false,
-        });
+        try {
+            const res = await signIn("credentials", {
+                email: values.email,
+                password: values.password,
+                redirect: false,
+            });
 
-        if (!res.ok) {
-            console.error("Failed to login user");
-            return;
+            // Debug logging
+            console.log("SignIn response:", res);
+
+            // Check if the response exists
+            if (!res) {
+                toast.error("Inloggen mislukt. Controleer je verbinding.");
+                setIsLoading(false);
+                return;
+            }
+
+            // Check for errors first (CredentialsSignin means invalid credentials)
+            if (res.error) {
+                toast.error("Ongeldige inloggegevens. Controleer je e-mail en wachtwoord.");
+                setIsLoading(false);
+                return;
+            }
+
+            // If we get here and ok is true, login was successful
+            if (res.ok === true && !res.error) {
+                toast.success("Je bent ingelogd!");
+                setIsLoading(false);
+                router.push("/");
+                return;
+            }
+
+            // Any other error
+            toast.error("Inloggen mislukt. Probeer het later opnieuw.");
+            setIsLoading(false);
+        } catch (error) {
+            console.error("SignIn error:", error);
+            toast.error("Inloggen mislukt. Probeer het later opnieuw.");
+            setIsLoading(false);
         }
-        // const user = await res.json();
-        toast.success("Your are logged in!");
     }
 
     // if (loading) {
@@ -71,7 +102,9 @@ export function SignInForm() {
                                 </FormItem>
                             )}
                         />
-                        <Button type="submit" className="w-full">Inloggen</Button>
+                        <Button type="submit" className="w-full" disabled={isLoading}>
+                            {isLoading ? "Inloggen..." : "Inloggen"}
+                        </Button>
                     </form>
                 </Form>
             </div>
