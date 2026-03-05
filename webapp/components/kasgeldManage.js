@@ -33,6 +33,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from "./ui/tooltip";
 export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns }) {
     const { data: session, status } = useSession();
     const router = useRouter();
+    const isAdmin = session?.user?.role?.includes('admin');
     const [selectedRun, setSelectedRun] = useState(null);
     const [openRunDetails, setOpenRunDetails] = useState(false);
     const [openRolePopover, setOpenRolePopover] = useState(false);
@@ -601,11 +602,16 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                                                     </SelectTrigger>
                                                                     <SelectContent>
                                                                         <SelectItem value="unassigned">Not assigned</SelectItem>
-                                                                        {users?.map(user => (
-                                                                            <SelectItem key={user.id} value={user.id}>
-                                                                                {user.firstname}
-                                                                            </SelectItem>
-                                                                        ))}
+                                                                        {users?.map(user => {
+                                                                            const displayName = isAdmin 
+                                                                                ? [user.firstname, user.lastname].filter(Boolean).join(' ') || user.displayname
+                                                                                : user.firstname;
+                                                                            return (
+                                                                                <SelectItem key={user.id} value={user.id}>
+                                                                                    {displayName}
+                                                                                </SelectItem>
+                                                                            );
+                                                                        })}
                                                                     </SelectContent>
                                                                 </Select>
                                                             </div>
@@ -755,7 +761,11 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                                         checked={selectedUsers.includes(user.id)}
                                                         onCheckedChange={() => toggleUserSelection(user.id)}
                                                     />
-                                                    <span className="font-medium">{user.firstname}</span>
+                                                    <span className="font-medium">
+                                                        {isAdmin 
+                                                            ? [user.firstname, user.lastname].filter(Boolean).join(' ') || user.displayname
+                                                            : user.firstname}
+                                                    </span>
                                                 </div>
 
                                                 {selectedUsers.includes(user.id) && (
