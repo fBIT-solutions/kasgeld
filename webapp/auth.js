@@ -27,12 +27,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 const user = userQuery.resources[0];
                 if (!user) return null;
 
-                if (!user.role.includes("admin") && !user.expires > Date.now()) {
+                if (!user.role.includes("admin") && user.expires < Date.now()) {
                     console.log("User account has expired");
                     return null;
                 }
-                console.log("pwd user:", password);
-                console.log("hash user:", await bcrypt.hash(password, 10));
                 const isValid = await bcrypt.compare(password, user.password);
                 if (!isValid) return null;
 

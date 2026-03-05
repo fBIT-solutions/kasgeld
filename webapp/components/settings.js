@@ -26,7 +26,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
     const [selectedUser, setSelectedUser] = useState(null);
     const [openUserDetails, setOpenUserDetails] = useState(false);
     const [openRolePopover, setOpenRolePopover] = useState(false);
-    const [editUser, setEditUser] = useState([]);
+    const [editUser, setEditUser] = useState(null);
     const roles = ["default", "guest", "member", "family", "worker", "admin"];
                                     const [qrToken, setQrToken] = useState(null);
 
@@ -51,7 +51,8 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                             const user = users.find(u => u.id === userId);
                             setSelectedUser(user);
                             setOpenUserDetails(true);
-                            setEditUser({ ...user });
+                            // Ensure role is always an array
+                            setEditUser({ ...user, role: Array.isArray(user.role) ? user.role : [user.role].filter(r => r) });
                         }}
                     >
                         <SelectTrigger className="w-32 h-7 text-xs">
@@ -83,7 +84,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                         <X
                             size={18}
                             className="absolute top-4 right-4 cursor-pointer "
-                            onClick={() => {setOpenUserDetails(false); setSelectedUser(null); setEditUser([]); setQrToken(null);}}
+                            onClick={() => {setOpenUserDetails(false); setSelectedUser(null); setEditUser(null); setQrToken(null);}}
                         />
                     )}
                     {selectedUser && (
@@ -158,7 +159,8 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                 className="mt-2 text-sm"
                                 onClick={() => {
                                     const userToken = Buffer.from(`${selectedUser.email}:${selectedUser.password}`).toString("base64");
-                                    setQrToken(`https://fambalker.net/guest-access?token=${userToken}`);
+                                    const encodedToken = encodeURIComponent(userToken);
+                                    setQrToken(`https://fambalker.net/guest-access?token=${encodedToken}`);
                                 }}
                             >
                                 Genereer Inlog QR Code
@@ -168,21 +170,28 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                 <Button
                                     className="mt-2"
                                     onClick={async () => {
-                                        const res = await fetch(`/api/users?id=${selectedUser.id}&email=${selectedUser.email}`, {
-                                            method: "PUT",
-                                            headers: {
-                                                "Content-Type": "application/json",
-                                            },
-                                            body: JSON.stringify(editUser),
-                                        });
-                                        if (res.ok) {
-                                            toast.success("Deelnemer succesvol bijgewerkt!");
-                                            onChangeUsers(users.map(u => u.id === selectedUser.id ? { ...u, ...editUser } : u));
-                                            setOpenUserDetails(false);
-                                            setSelectedUser(null);
-                                            setEditUser([]);
-                                        } else {
-                                            toast.error("Fout bij het updaten van deelnemer.");
+                                        try {
+                                            const res = await fetch(`/api/users?id=${encodeURIComponent(selectedUser.id)}`, {
+                                                method: "PUT",
+                                                headers: {
+                                                    "Content-Type": "application/json",
+                                                },
+                                                body: JSON.stringify(editUser),
+                                            });
+                                            if (res.ok) {
+                                                const updated = await res.json();
+                                                toast.success("Deelnemer succesvol bijgewerkt!");
+                                                onChangeUsers(users.map(u => u.id === selectedUser.id ? updated : u));
+                                                setOpenUserDetails(false);
+                                                setSelectedUser(null);
+                                                setEditUser(null);
+                                            } else {
+                                                const error = await res.json();
+                                                toast.error(error.details || "Fout bij het updaten van deelnemer.");
+                                            }
+                                        } catch (error) {
+                                            console.error("Update error:", error);
+                                            toast.error("Netwerkfout bij het updaten.");
                                         }
                                     }}>
                                     Opslaan
@@ -191,17 +200,23 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                     variant="destructive"
                                     className="mt-2"
                                     onClick={async () => {
-                                        const res = await fetch(`/api/users?id=${selectedUser.id}&email=${selectedUser.email}`, {
-                                            method: "DELETE",
-                                        });
-                                        if (res.ok) {
-                                            toast.success("Deelnemer succesvol verwijderd!");
-                                            onChangeUsers(users.filter(u => u.id !== selectedUser.id));
-                                            setOpenUserDetails(false);
-                                            setSelectedUser(null);
-                                            setEditUser([]);
-                                        } else {
-                                            toast.error("Fout bij het verwijderen van deelnemer.");
+                                        try {
+                                            const res = await fetch(`/api/users?id=${encodeURIComponent(selectedUser.id)}`, {
+                                                method: "DELETE",
+                                            });
+                                            if (res.ok) {
+                                                toast.success("Deelnemer succesvol verwijderd!");
+                                                onChangeUsers(users.filter(u => u.id !== selectedUser.id));
+                                                setOpenUserDetails(false);
+                                                setSelectedUser(null);
+                                                setEditUser(null);
+                                            } else {
+                                                const error = await res.json();
+                                                toast.error(error.details || "Fout bij het verwijderen van deelnemer.");
+                                            }
+                                        } catch (error) {
+                                            console.error("Delete error:", error);
+                                            toast.error("Netwerkfout bij het verwijderen.");
                                         }
                                     }}>
                                     Deelnemer Verwijderen
