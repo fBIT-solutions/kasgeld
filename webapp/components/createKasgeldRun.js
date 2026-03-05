@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 
-export function createKasgeldRun({ onSuccess }) {
+export default function CreateKasgeldRun({ onSuccess }) {
     const form = useForm({
         defaultValues: {
             year: dayjs().add(1, 'year').format('YYYY'),
@@ -125,12 +125,4 @@ export function createKasgeldRun({ onSuccess }) {
             </Form>
         </div>
     );
-}
-//     else {
-//         return (<></>);
-//     }
-// }
-
-export default function CreateKasgeldRun(props) {
-    return createKasgeldRun(props);
 }

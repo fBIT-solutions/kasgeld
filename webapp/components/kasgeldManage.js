@@ -452,10 +452,19 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                 <Sheet open={createRunSheetOpen} onOpenChange={setCreateRunSheetOpen}>
                     <SheetTrigger asChild className=""><Button className="text-xs">Kasgeld toevoegen</Button></SheetTrigger>
                     <SheetContent className="w-full max-w-md">
-                        <CreateKasgeldRun onSuccess={(newRun) => {
-                            onChangeRuns([...runs, newRun]);
-                            setSelectedRun(newRun);
-                            setEditRun(newRun);
+                        <CreateKasgeldRun onSuccess={async (newRun) => {
+                            // Fetch fresh data from API to ensure all units are included
+                            const res = await fetch("/api/runs");
+                            if (res.ok) {
+                                const freshRuns = await res.json();
+                                onChangeRuns(freshRuns);
+                                // Find and select the newly created run
+                                const createdRun = freshRuns.find(r => r.id === newRun.id);
+                                if (createdRun) {
+                                    setSelectedRun(createdRun);
+                                    setEditRun(createdRun);
+                                }
+                            }
                             setCreateRunSheetOpen(false);
                         }} />
                     </SheetContent>
