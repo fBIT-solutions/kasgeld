@@ -7,7 +7,7 @@ export async function GET(req) {
 
     const userQuery = await container.items
         .query({
-            query: "SELECT * FROM c WHERE c.expires > @now",
+            query: "SELECT * FROM c WHERE c.expires > @now OR NOT IS_DEFINED(c.expires)",
             parameters: [{ name: "@now", value: new Date() }],
         })
         .fetchAll();

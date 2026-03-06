@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import SignUpForm from "@/components/signup_form";
+import UserCreationForm from "@/components/user-creation-form";
 import {
     Sheet,
     SheetTrigger,
@@ -28,7 +28,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
     const [openRolePopover, setOpenRolePopover] = useState(false);
     const [editUser, setEditUser] = useState(null);
     const roles = ["default", "guest", "member", "family", "worker", "admin"];
-                                    const [qrToken, setQrToken] = useState(null);
+    const [qrToken, setQrToken] = useState(null);
 
     if (!session) {
         return (
@@ -39,10 +39,13 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
         );
     }
 
+    const isAdmin = session?.user?.role?.includes('admin');
+
     return (
         <div className="settings-component flex flex-col items-center w-full py-2">
             <h1 className="text-3xl font-semibold mb-6">Kasgeld Beheer</h1>
-                <p className="text-xl font-semibold">Beheer Deelnemers</p>
+            
+            <p className="text-xl font-semibold">Beheer Deelnemers</p>
             <div className="flex flex-row w-full justify-between mb-2 items-center border-b-2 border-green-800 py-2">
                 <div className="flex items-center gap-2 mt-1">
                     <Select
@@ -67,12 +70,16 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                         </SelectContent>
                     </Select>
                 </div>
-                <Sheet>
-                    <SheetTrigger asChild className=""><Button className="text-xs">Deelnemer toevoegen</Button></SheetTrigger>
-                    <SheetContent className="w-full max-w-md">
-                        <SignUpForm />
-                    </SheetContent>
-                </Sheet>
+                {isAdmin && (
+                    <Sheet>
+                        <SheetTrigger asChild className=""><Button className="text-xs">Deelnemer toevoegen</Button></SheetTrigger>
+                        <SheetContent className="w-full max-w-md overflow-y-auto">
+                            <div className="mt-6">
+                                <UserCreationForm onUserCreated={() => onChangeUsers()} />
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+                )}
             </div>
             <KasgeldManage users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} />
             <Popover open={openUserDetails}>

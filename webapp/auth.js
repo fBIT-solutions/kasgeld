@@ -6,7 +6,7 @@ import { getItems, addItem, getContainer } from "./lib/cosmosdb";
 const containerId = "users";
 const container = await getContainer(containerId);
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authConfig = {
     providers: [
         Credentials({
             credentials: {
@@ -27,10 +27,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 const user = userQuery.resources[0];
                 if (!user) return null;
 
-                if (!user.role.includes("admin") && user.expires < Date.now()) {
+                if (!user.role.includes("admin") && user.expires && user.expires < Date.now()) {
                     console.log("User account has expired");
                     return null;
                 }
+
+                // Check if user has OTP that needs verification
+                if (user.otp && user.mustChangePassword) {
+                    console.log("User has OTP - requires verification first");
+                    return null; // Will trigger CredentialsSignin error
+                }
+
                 const isValid = await bcrypt.compare(password, user.password);
                 if (!isValid) return null;
 
@@ -40,7 +47,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     firstname: user.firstname ?? "",
                     lastname: user.lastname ?? "",
                     displayname: user.displayname || `${user.firstname} ${user.lastname}`.trim(),
-                    role: user.role || "default",
+                    role: Array.isArray(user.role) ? user.role : [user.role || "member"],
                 };
             },
         }),
@@ -69,8 +76,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
-});
+};
 
+export const { handlers, signIn, signOut, auth } = NextAuth(authConfig);
 
 // pwd user: Hofstede81
 // hash user: $2b$10$Fq9UQTpmpiZkYQ33uT.4rODqlOLksXK0MRDVDx2VPxZNp94By9dZ6
