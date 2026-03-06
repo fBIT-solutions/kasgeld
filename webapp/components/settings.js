@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import UserCreationForm from "@/components/user-creation-form";
+import RegistrationRequestsPanel from "@/components/registration-requests-panel";
 import {
     Sheet,
     SheetTrigger,
@@ -82,6 +83,13 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                 )}
             </div>
             <KasgeldManage users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} />
+            
+            {isAdmin && (
+                <div className="w-full mt-8">
+                    <RegistrationRequestsPanel />
+                </div>
+            )}
+            
             <Popover open={openUserDetails}>
                 <PopoverTrigger>
                     {/* <Button className="text-xs">View User Details</Button> */}<span className="hidden">bewerken</span>

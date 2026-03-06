@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { RegistrationRequestForm } from "@/components/registration-request-form";
 
 export function SignInForm() {
   const router = useRouter();
-  const [step, setStep] = useState("credentials"); // "credentials" | "otp" | "password-change"
+  const [step, setStep] = useState("login-method"); // "login-method" | "credentials" | "otp-verify" | "password-change"
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("login"); // "login" | "registration"
 
   // Step 1: Login credentials
   const [email, setEmail] = useState("");
@@ -61,7 +63,7 @@ export function SignInForm() {
             // Check if user exists and has OTP (needs verification)
             if (user?.otp && user?.mustChangePassword) {
               setUserData(user);
-              setStep("otp");
+              setStep("otp-verify");
               toast.info("OTP vereist - voer je eenmalige code in");
               setIsLoading(false);
               return;
@@ -111,6 +113,18 @@ export function SignInForm() {
     }
   };
 
+  const handleOtpVerifyStart = async (e) => {
+    e.preventDefault();
+
+    if (!email) {
+      toast.error("Email is verplicht");
+      return;
+    }
+
+    // Just switch to OTP verify step - the user will enter OTP there
+    setStep("otp-verify");
+  };
+
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
 
@@ -137,6 +151,8 @@ export function SignInForm() {
         setIsLoading(false);
         return;
       }
+
+      setUserData(data.user);
 
       if (data.mustChangePassword) {
         // Need to change password
@@ -210,23 +226,152 @@ export function SignInForm() {
     }
   };
 
+  // Show registration form if activeTab is "registration"
+  if (activeTab === "registration") {
+    return (
+      <div className="min-h-screen flex items-center justify-center py-12 px-4">
+        <RegistrationRequestForm 
+          onSuccess={() => {
+            setActiveTab("login");
+          }}
+          onCancel={() => {
+            setActiveTab("login");
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Show login form
   return (
     <div className="min-h-screen flex items-center justify-center py-12 px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>
+            {step === "login-method" && "Hoe wil je inloggen?"}
             {step === "credentials" && "Inloggen"}
-            {step === "otp" && "Verificatie Code"}
+            {step === "otp-verify" && "Verificatie Code"}
             {step === "password-change" && "Wachtwoord Wijzigen"}
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {step === "login-method" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600 mb-6">
+                Kies hoe je wilt inloggen. Heb je net een welkomsmail met OTP ontvangen? Selecteer dan "Met OTP Code".
+              </p>
+              
+              <Button
+                onClick={() => setStep("credentials")}
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                size="lg"
+              >
+                🔐 Normaal Inloggen
+              </Button>
+              
+              <Button
+                onClick={() => {
+                  setStep("otp-verify");
+                  setEmail("");
+                  setPassword("");
+                  setOtp("");
+                }}
+                variant="outline"
+                className="w-full"
+                size="lg"
+              >
+                📧 Met OTP Code
+              </Button>
+
+              <div className="mt-6 pt-6 border-t">
+                <p className="text-gray-600 text-sm mb-3 text-center">Nog geen account?</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveTab("registration")}
+                  className="w-full"
+                >
+                  Dien een Registratieverzoek In
+                </Button>
+              </div>
+            </div>
+          )}
+
           {step === "credentials" && (
-            <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+            <>
+              <form onSubmit={handleCredentialsSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    disabled={isLoading}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="password">Wachtwoord</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={isLoading}
+                    required
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full"
+                >
+                  {isLoading ? "Bezig met inloggen..." : "Inloggen"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setStep("login-method")}
+                  disabled={isLoading}
+                  className="w-full"
+                >
+                  Terug
+                </Button>
+              </form>
+
+              <div className="mt-4 text-center text-sm">
+                <p className="text-gray-600 mb-2">Nog geen account?</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setActiveTab("registration")}
+                  className="w-full"
+                >
+                  Dien een Registratieverzoek In
+                </Button>
+              </div>
+            </>
+          )}
+
+          {step === "otp-verify" && (
+            <form onSubmit={handleOtpSubmit} className="space-y-4">
+              <div className="bg-blue-50 p-4 rounded-lg mb-4">
+                <p className="text-sm text-gray-700">
+                  <strong>Je hebt zojuist een welkomsmail ontvangen!</strong><br/>
+                  Voer je email en de 6-cijferige code uit de mail in om in te loggen.
+                </p>
+              </div>
+
               <div>
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email-otp">Email</Label>
                 <Input
-                  id="email"
+                  id="email-otp"
                   type="email"
                   placeholder="your@email.com"
                   value={email}
@@ -237,38 +382,7 @@ export function SignInForm() {
               </div>
 
               <div>
-                <Label htmlFor="password">Wachtwoord</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={isLoading}
-                  required
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full"
-              >
-                {isLoading ? "Bezig met inloggen..." : "Inloggen"}
-              </Button>
-            </form>
-          )}
-
-          {step === "otp" && (
-            <form onSubmit={handleOtpSubmit} className="space-y-4">
-              <div className="bg-blue-50 p-4 rounded-lg mb-4">
-                <p className="text-sm text-gray-700">
-                  We hebben een verificatie code naar je email gezonden. Voer deze in:
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="otp">Verificatie Code</Label>
+                <Label htmlFor="otp">Verificatie Code (OTP)</Label>
                 <Input
                   id="otp"
                   type="text"
@@ -284,7 +398,7 @@ export function SignInForm() {
 
               <Button
                 type="submit"
-                disabled={isLoading || otp.length !== 6}
+                disabled={isLoading || otp.length !== 6 || !email}
                 className="w-full"
               >
                 {isLoading ? "Bezig met verificatie..." : "Code Verifiëren"}
@@ -294,13 +408,14 @@ export function SignInForm() {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setStep("credentials");
+                  setStep("login-method");
                   setOtp("");
+                  setEmail("");
                 }}
                 disabled={isLoading}
                 className="w-full"
               >
-                Terug naar Inloggen
+                Terug
               </Button>
             </form>
           )}

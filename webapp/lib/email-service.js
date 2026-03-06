@@ -117,9 +117,9 @@ export async function sendWelcomeEmail(options) {
           
           <p style="margin: 10px 0; color: #666;">
             <strong>Wachtwoord:</strong><br>
-            <code style="background-color: #f0f0f0; padding: 8px 12px; border-radius: 4px; font-family: monospace;">
+            <span style="color: #0369a1; font-style: italic;">
               ${tempPassword}
-            </code>
+            </span>
           </p>
           
           <p style="margin: 10px 0; color: #666;">
@@ -212,6 +212,94 @@ Dit is een automatische melding van het Kasgeld-systeem.
     return await response.json();
   } catch (error) {
     console.error("Error sending welcome email:", error);
+    throw error;
+  }
+}
+/**
+ * Send rejection email to registration request applicant
+ * @param {String} recipientEmail - User's email
+ * @param {String} recipientName - User's name
+ * @param {String} rejectionMessage - Admin's rejection message
+ */
+export async function sendRejectionEmail(recipientEmail, recipientName, rejectionMessage) {
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px;">
+        <h1 style="color: #d32f2f; margin-top: 0;">Registratieverzoek Status Update</h1>
+        
+        <p style="color: #666; font-size: 16px;">
+          Hallo ${recipientName},
+        </p>
+        
+        <div style="background-color: #ffebee; padding: 20px; border-radius: 8px; border-left: 4px solid #d32f2f; margin: 20px 0;">
+          <h3 style="color: #d32f2f; margin-top: 0;">Verzoek Afgewezen</h3>
+          
+          <p style="color: #666; line-height: 1.6; margin: 10px 0;">
+            We hebben je registratieverzoek helaas afgewezen. 
+          </p>
+          
+          <p style="color: #666; line-height: 1.6; margin: 10px 0;">
+            <strong>Bericht van de beheerder:</strong>
+          </p>
+          
+          <div style="background-color: white; padding: 15px; border-radius: 4px; border-left: 4px solid #ff9800; margin: 10px 0;">
+            <p style="color: #666; margin: 0; line-height: 1.6;">
+              ${rejectionMessage || "Je aanvraag voldeed niet aan onze voorwaarden."}
+            </p>
+          </div>
+        </div>
+        
+        <p style="color: #666; line-height: 1.6; margin-bottom: 20px;">
+          Heb je vragen over deze beslissing? Neem contact op met de beheerder van Kasgeld.
+        </p>
+        
+        <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px;">
+          Dit is een automatische melding van het Kasgeld-systeem. Gelieve niet op deze e-mail te antwoorden.
+        </p>
+      </div>
+    </div>
+  `;
+
+  const textContent = `
+Registratieverzoek Status Update
+
+Hallo ${recipientName},
+
+We hebben je registratieverzoek helaas afgewezen.
+
+Bericht van de beheerder:
+${rejectionMessage || "Je aanvraag voldeed niet aan onze voorwaarden."}
+
+Heb je vragen over deze beslissing? Neem contact op met de beheerder van Kasgeld.
+
+Dit is een automatische melding van het Kasgeld-systeem.
+  `;
+
+  try {
+    // Use full URL for server-side fetch
+    const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+    const response = await fetch(`${baseUrl}/api/email/send-rejection`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipientEmail,
+        recipientName,
+        htmlContent,
+        textContent,
+        subject: "Kasgeld: Registratieverzoek Afgewezen",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(`Email API returned ${response.status}: ${errorData.error}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error sending rejection email:", error);
     throw error;
   }
 }
