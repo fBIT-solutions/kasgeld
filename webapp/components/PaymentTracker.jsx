@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/accordion";
 import { AlertTriangle } from "lucide-react";
 import dayjs from "dayjs";
+import { sendPaymentReminders } from "@/lib/email-service";
 
 export default function PaymentTracker({ run, users }) {
   const { data: session } = useSession();
@@ -27,6 +28,7 @@ export default function PaymentTracker({ run, users }) {
   const [loading, setLoading] = useState(false);
   const [saveAmount, setSaveAmount] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(null);
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   const isAdmin = session?.user?.role?.includes('admin');
 
@@ -124,6 +126,61 @@ export default function PaymentTracker({ run, users }) {
     } catch (error) {
       console.error("Error toggling payment:", error);
       toast.error("Fout bij het bijwerken.");
+    }
+  };
+
+  const handleSendReminders = async () => {
+    if (!selectedMonth) {
+      toast.error("Selecteer eerst een maand");
+      return;
+    }
+
+    try {
+      setSendingReminders(true);
+
+      // Get unpaid users for this month
+      const unpaidUserIds = unitUsers.filter(userId => {
+        const payment = getPaymentStatus(userId, selectedMonth);
+        return !payment || !payment.paid;
+      });
+
+      if (unpaidUserIds.length === 0) {
+        toast.info("Alle deelnemers hebben al betaald");
+        setSendingReminders(false);
+        return;
+      }
+
+      // Send reminders using the email service
+      const results = await sendPaymentReminders(
+        run.year || new Date().getFullYear(),
+        selectedMonth,
+        unpaidUserIds.map(userId => {
+          const user = users?.find(u => u.id === userId);
+          return {
+            id: userId,
+            firstname: user?.firstname,
+            lastname: user?.lastname,
+            displayname: user?.displayname,
+            email: user?.email,
+          };
+        }),
+        (userId) => calculatePaymentAmount(userId)
+      );
+
+      console.log("Reminder results:", results);
+
+      if (results.sent.length > 0) {
+        toast.success(`${results.sent.length} herinneringen verzonden`);
+      }
+
+      if (results.failed.length > 0) {
+        toast.error(`${results.failed.length} herinneringen mislukt`);
+      }
+    } catch (error) {
+      console.error("Error sending reminders:", error);
+      toast.error("Fout bij het verzenden van herinneringen");
+    } finally {
+      setSendingReminders(false);
     }
   };
 
@@ -349,6 +406,16 @@ export default function PaymentTracker({ run, users }) {
                         € {getOutstandingAmount()} openstaand
                       </div>
                     </div>
+                    {getUnpaidParticipantCount() > 0 && (
+                      <Button
+                        size="sm"
+                        onClick={handleSendReminders}
+                        disabled={sendingReminders || !selectedMonth}
+                        className="mt-3 bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        {sendingReminders ? "Bezig met verzenden..." : "Herinneringen verzenden"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

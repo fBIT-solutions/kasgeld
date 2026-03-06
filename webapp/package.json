@@ -45,6 +45,7 @@
     "react-big-calendar": "^1.19.3",
     "react-dom": "^18.3.0",
     "react-hook-form": "^7.56.4",
+    "resend": "^6.9.3",
     "semantic-release": "^24.2.9",
     "shadcn": "^2.4.0-canary.17",
     "sonner": "^2.0.3",
