@@ -6,6 +6,7 @@ import { Calendar, Home, Settings, LogInIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/user-menu";
+import { PaymentStatusBanner } from "@/components/payment-status-banner";
 import {
     Sidebar,
     SidebarContent,
@@ -43,6 +44,11 @@ import {
           </div>
         </SidebarHeader>
         <SidebarContent>
+          {session.data?.user?.email && (
+            <div className="px-4 py-3">
+              <PaymentStatusBanner userEmail={session.data.user.email} />
+            </div>
+          )}
           <SidebarGroup />
           <SidebarGroupContent>
             <SidebarMenu>

@@ -303,3 +303,84 @@ Dit is een automatische melding van het Kasgeld-systeem.
     throw error;
   }
 }
+
+/**
+ * Send contact message to admin from user
+ * @param {Object} options - Email options
+ * @param {String} options.adminEmail - Admin's email
+ * @param {String} options.fromEmail - User's email
+ * @param {String} options.fromName - User's name
+ * @param {String} options.subject - Message subject
+ * @param {String} options.message - Message content
+ */
+export async function sendContactMessage(options) {
+  const { adminEmail, fromEmail, fromName, subject, message } = options;
+
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px;">
+        <h1 style="color: #333; margin-top: 0;">📧 Nieuw bericht van gebruiker</h1>
+        
+        <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3b82f6;">
+          <h3 style="color: #333; margin-top: 0;">Van:</h3>
+          <p style="margin: 5px 0; color: #666;">
+            <strong>${fromName}</strong><br>
+            ${fromEmail}
+          </p>
+
+          <h3 style="color: #333; margin: 20px 0 0 0;">Onderwerp:</h3>
+          <p style="margin: 5px 0; color: #0369a1; font-weight: bold; font-size: 16px;">
+            ${subject}
+          </p>
+
+          <h3 style="color: #333; margin: 20px 0 0 0;">Bericht:</h3>
+          <div style="background-color: #f9f9f9; padding: 15px; border-radius: 4px; border-left: 3px solid #0369a1; color: #333; line-height: 1.6;">
+            ${message.replace(/\n/g, '<br>')}
+          </div>
+        </div>
+
+        <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 20px;">
+          Dit is een automatische melding van het Kasgeld-systeem.
+        </p>
+      </div>
+    </div>
+  `;
+
+  const textContent = `
+Nieuw bericht van gebruiker
+
+Van: ${fromName} (${fromEmail})
+Onderwerp: ${subject}
+
+Bericht:
+${message}
+  `;
+
+  try {
+    const response = await fetch(
+      `${process.env.NEXTAUTH_URL}/api/email/send-contact-message`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipientEmail: adminEmail,
+          htmlContent,
+          textContent,
+          subject: `Kasgeld: ${subject}`,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+      throw new Error(`Email API returned ${response.status}: ${errorData.error}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error sending contact message email:", error);
+    throw error;
+  }
+}
