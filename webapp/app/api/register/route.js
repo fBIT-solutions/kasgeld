@@ -2,11 +2,11 @@ import bcrypt from "bcryptjs";
 import { getItems, addItem, getContainer } from "../../../lib/cosmosdb";
 
 const containerId = "users";
-const container = await getContainer(containerId);
 
 export async function POST(req)  {
   if (req.method !== "POST") return new response({status: 405});
 
+  const container = await getContainer(containerId);
   const data = await req.json();
     if (!data.email || !data.password) {
         return new Response(JSON.stringify({ message: "Email and password are required" }), { status: 400 });

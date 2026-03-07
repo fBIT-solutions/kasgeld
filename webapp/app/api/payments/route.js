@@ -9,7 +9,7 @@ export async function POST(req) {
     const container = await getContainer(paymentsContainerId);
 
     // Create or update payment record
-    const { id, runId, userId, month, amount, handCount, paid, paidDate } = data;
+    const { id, runId, userId, email, month, amount, handCount, paid, paidDate } = data;
 
     if (id) {
       // Update existing payment
@@ -20,6 +20,7 @@ export async function POST(req) {
           amount,
           handCount,
           paid,
+          email: email || existingPayment.email, // Preserve or update email
           paidDate: paid ? (paidDate || new Date().toISOString()) : null,
         };
         const { resource } = await container.item(id, id).replace(updatedPayment);
@@ -33,6 +34,7 @@ export async function POST(req) {
         id: crypto.randomUUID(),
         runId,
         userId,
+        email: email || "", // Store email for easy lookup
         month,
         amount: amount || 0,
         handCount: handCount || 0,
@@ -52,6 +54,8 @@ export async function GET(req) {
   try {
     const { searchParams } = new URL(req.url);
     const runId = searchParams.get("runId");
+    const email = searchParams.get("email");
+    const month = searchParams.get("month");
     
     const container = await getContainer(paymentsContainerId);
 
@@ -69,6 +73,27 @@ export async function GET(req) {
         }
         return a.userId.localeCompare(b.userId);
       });
+      
+      return new Response(JSON.stringify(resources), { status: 200 });
+    }
+
+    // Filter by email and/or month
+    if (email || month) {
+      // Get all payments and filter on client side
+      const querySpec = {
+        query: "SELECT * FROM c",
+      };
+      let { resources } = await container.items.query(querySpec).fetchAll();
+      
+      // Filter by email if provided
+      if (email) {
+        resources = resources.filter((p) => p.email === email);
+      }
+      
+      // Filter by month if provided
+      if (month) {
+        resources = resources.filter((p) => p.month === month);
+      }
       
       return new Response(JSON.stringify(resources), { status: 200 });
     }

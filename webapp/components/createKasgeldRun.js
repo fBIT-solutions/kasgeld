@@ -28,9 +28,24 @@ export default function CreateKasgeldRun({ onSuccess }) {
             units: [],
         };
         const transactionAMonth = values.unitsAvailable / 12;
+        const now = new Date();
+        const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        
         for (let i = 1; i <= 12; i++) {
             for (let j = 1; j <= parseInt(transactionAMonth); j++) {
-                data.units.push({ name: `${dayjs(values.start).add(i, 'month').format('MM-YYYY')}`, hand: j, assignedTo: null });
+                const monthName = dayjs(values.start).add(i, 'month').format('MM-YYYY');
+                // Set first available month to "open", rest to "pending"
+                let status = "pending";
+                if (monthName === currentMonth || (i === 1 && dayjs(values.start).format('MM-YYYY') <= currentMonth)) {
+                  status = "open";
+                }
+                
+                data.units.push({ 
+                  name: monthName, 
+                  hand: j, 
+                  assignedTo: null,
+                  status: status // Add status field
+                });
             }
         }
 

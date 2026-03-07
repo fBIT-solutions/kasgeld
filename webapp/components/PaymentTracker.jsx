@@ -97,8 +97,10 @@ export default function PaymentTracker({ run, users }) {
 
   const handlePaymentToggle = async (payment) => {
     try {
+      const user = users?.find(u => u.id === payment.userId);
       const updatedPayment = {
         ...payment,
+        email: user?.email || "", // Add email from users array
         paid: !payment.paid,
         paidDate: !payment.paid ? new Date().toISOString() : null,
       };
@@ -115,6 +117,32 @@ export default function PaymentTracker({ run, users }) {
         const responseData = await res.json();
         console.log("Payment response:", responseData);
         console.log("Payment state after update:", updatedPayment.paid ? "PAID ✓" : "UNPAID ✗");
+        
+        // If payment was just marked as paid, update unit status to "uitbetaald"
+        if (updatedPayment.paid && run?.id && payment.month) {
+          try {
+            const unitStatusRes = await fetch("/api/units/status", {
+              method: "POST",
+              body: JSON.stringify({
+                runId: run.id,
+                monthName: payment.month,
+                newStatus: "uitbetaald"
+              }),
+              headers: { "Content-Type": "application/json" },
+            });
+            
+            if (unitStatusRes.ok) {
+              console.log("Unit status updated to 'uitbetaald' and next unit set to 'open'");
+              // Optionally refetch run data to reflect unit status changes
+            } else {
+              console.error("Failed to update unit status:", unitStatusRes.status);
+            }
+          } catch (unitError) {
+            console.error("Error updating unit status:", unitError);
+            // Don't fail the payment update if unit status update fails
+          }
+        }
+        
         await fetchPayments();
         toast.success(updatedPayment.paid ? "Betaling gemarkeerd als betaald" : "Betaling ongedaan gemaakt");
       } else {
@@ -250,6 +278,26 @@ export default function PaymentTracker({ run, users }) {
     return handCount * parseFloat(monthlyAmount || 0);
   };
 
+  // Get unit status for a specific month
+  const getUnitStatus = (monthName) => {
+    const unit = run?.units?.find(u => u.name === monthName);
+    return unit?.status || "pending"; // Default to pending
+  };
+
+  // Get status badge color and label
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case "pending":
+        return { color: "bg-gray-100 text-gray-700", label: "Toekomstig", icon: "⏳" };
+      case "open":
+        return { color: "bg-yellow-100 text-yellow-700", label: "Open", icon: "📂" };
+      case "uitbetaald":
+        return { color: "bg-green-100 text-green-700", label: "Uitbetaald", icon: "✓" };
+      default:
+        return { color: "bg-gray-100 text-gray-700", label: "Onbekend", icon: "?" };
+    }
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -323,7 +371,18 @@ export default function PaymentTracker({ run, users }) {
                 {months.map(month => (
                   <AccordionItem key={month} value={month} className="border-b last:border-b-0">
                     <AccordionTrigger className="text-sm font-medium py-2">
-                      {month}
+                      <div className="flex items-center gap-2">
+                        <span>{month}</span>
+                        {(() => {
+                          const status = getUnitStatus(month);
+                          const badge = getStatusBadge(status);
+                          return (
+                            <Badge className={`text-xs ${badge.color}`}>
+                              {badge.icon} {badge.label}
+                            </Badge>
+                          );
+                        })()}
+                      </div>
                       <Badge variant="outline" className="ml-2 text-xs">
                         {unitUsers.filter(userId => {
                           const payment = getPaymentStatus(userId, month);
@@ -332,6 +391,24 @@ export default function PaymentTracker({ run, users }) {
                       </Badge>
                     </AccordionTrigger>
                     <AccordionContent className="space-y-2 pt-2">
+                      {(() => {
+                        const monthStatus = getUnitStatus(month);
+                        const statusBadge = getStatusBadge(monthStatus);
+                        return (
+                          <>
+                            {monthStatus === "open" && (
+                              <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                                <strong>📂 Dit is de huidige open maand</strong> - Deelnemers moeten hun bijdrage betalen
+                              </div>
+                            )}
+                            {monthStatus === "uitbetaald" && (
+                              <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded text-xs text-green-800">
+                                <strong>✓ Uitbetaald</strong> - Deze maand is afgeronded
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                       {unitUsers.map(userId => {
                         const payment = getPaymentStatus(userId, month);
                         const userName = getUserName(userId);
