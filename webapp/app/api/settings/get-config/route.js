@@ -1,4 +1,5 @@
 import { getContainer } from "@/lib/cosmosdb";
+import { auth } from "@/auth";
 
 const settingsContainerId = "settings";
 
@@ -47,10 +48,9 @@ export async function GET(req) {
  */
 export async function POST(req) {
   try {
-    const { session } = await import("@/auth");
-    const auth = await session();
+    const session = await auth();
 
-    if (!auth || !auth.user?.role?.includes("admin")) {
+    if (!session || !session.user?.role?.includes("admin")) {
       return new Response(
         JSON.stringify({ error: "Unauthorized" }),
         { status: 403 }
@@ -65,7 +65,7 @@ export async function POST(req) {
       adminEmail: body.adminEmail || process.env.ADMIN_EMAIL || "admin@kasgeld.nl",
       appName: body.appName || "Kasgeld",
       updatedAt: new Date().toISOString(),
-      updatedBy: auth.user.email,
+      updatedBy: session.user.email,
     };
 
     const { resource } = await container.items.upsert(config);

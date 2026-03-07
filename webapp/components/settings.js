@@ -4,6 +4,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import UserCreationForm from "@/components/user-creation-form";
 import RegistrationRequestsPanel from "@/components/registration-requests-panel";
+import AppSettingsPanel from "@/components/app-settings-panel";
 import {
     Sheet,
     SheetTrigger,
@@ -85,7 +86,8 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
             <KasgeldManage users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} />
             
             {isAdmin && (
-                <div className="w-full mt-8">
+                <div className="w-full mt-8 space-y-8">
+                    <AppSettingsPanel />
                     <RegistrationRequestsPanel />
                 </div>
             )}
