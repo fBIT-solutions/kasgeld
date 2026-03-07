@@ -56,7 +56,10 @@ export function ContactMessageButton() {
         return;
       }
 
-      toast.success("Bericht verzonden naar beheerder");
+      toast.success(data.message || "Bericht verzonden naar beheerder");
+      if (!data.emailSent) {
+        toast.info("Bericht is opgeslaan maar email kon niet verzonden worden");
+      }
       setSubject("");
       setMessage("");
       setOpen(false);

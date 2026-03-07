@@ -1,5 +1,6 @@
 import { getContainer } from "@/lib/cosmosdb";
 import { auth } from "@/auth";
+import { sendContactMessage } from "@/lib/email-service";
 
 const messageContainerId = "contact-messages";
 
@@ -59,20 +60,24 @@ export async function POST(req) {
     await container.items.create(messageDoc);
 
     // Send email to admin
+    let emailSent = false;
     try {
-      await fetch(`${process.env.NEXTAUTH_URL}/api/email/send-contact-message`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          adminEmail,
-          fromEmail: session.user.email,
-          fromName: messageDoc.fromName,
-          subject,
-          message,
-        }),
+      await sendContactMessage({
+        adminEmail,
+        fromEmail: session.user.email,
+        fromName: messageDoc.fromName,
+        subject,
+        message,
       });
+      emailSent = true;
+      
+      // Update message status to sent
+      const updatedMessage = {
+        ...messageDoc,
+        status: "sent",
+        sentAt: new Date().toISOString(),
+      };
+      await container.item(messageDoc.id, messageDoc.id).replace(updatedMessage);
     } catch (emailError) {
       console.error("Error sending email:", emailError);
       // Don't fail if email doesn't send
@@ -81,7 +86,8 @@ export async function POST(req) {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: "Bericht verzonden naar beheerder" 
+        message: "Bericht opgeslagen" + (emailSent ? " en verstuurd" : ""),
+        emailSent
       }),
       { status: 200 }
     );
