@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Accordion,
   AccordionContent,
@@ -21,7 +22,7 @@ import { AlertTriangle } from "lucide-react";
 import dayjs from "dayjs";
 import { sendPaymentReminders } from "@/lib/email-service";
 
-export default function PaymentTracker({ run, users }) {
+export default function PaymentTracker({ run, users, onChangeRuns }) {
   const { data: session } = useSession();
   const [monthlyAmount, setMonthlyAmount] = useState(run?.monthlyAmount || 0);
   const [payments, setPayments] = useState([]);
@@ -47,7 +48,6 @@ export default function PaymentTracker({ run, users }) {
   useEffect(() => {
     if (months.length > 0 && !selectedMonth) {
       setSelectedMonth(months[0]);
-      console.log("Initialized selected month to:", months[0]);
     }
   }, [months.length, selectedMonth]);
 
@@ -56,9 +56,7 @@ export default function PaymentTracker({ run, users }) {
       const res = await fetch(`/api/payments?runId=${run.id}`);
       if (res.ok) {
         const data = await res.json();
-        console.log("Fetched payments:", data);
-        console.log("Paid count:", data?.filter(p => p.paid).length);
-        console.log("Unpaid count:", data?.filter(p => !p.paid).length);
+
         setPayments(data || []);
       } else {
         console.error("Failed to fetch payments:", res.status);
@@ -209,6 +207,36 @@ export default function PaymentTracker({ run, users }) {
       toast.error("Fout bij het verzenden van herinneringen");
     } finally {
       setSendingReminders(false);
+    }
+  };
+
+  // Handle unit status change by admin
+  const handleUnitStatusChange = async (monthName, newStatus) => {
+    try {
+      const res = await fetch("/api/units/status", {
+        method: "POST",
+        body: JSON.stringify({
+          runId: run.id,
+          monthName,
+          newStatus,
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (res.ok) {
+        const updatedRun = await res.json();
+        console.log(`[PaymentTracker] Unit status changed: ${monthName} → ${newStatus}`);
+        toast.success(`Status gewijzigd naar "${newStatus}" voor ${monthName}`);
+        // Update parent component state so UI reflects changes immediately
+        if (onChangeRuns) {
+          onChangeRuns(updatedRun);
+        }
+      } else {
+        toast.error("Fout bij het wijzigen van status");
+      }
+    } catch (error) {
+      console.error("[PaymentTracker] Error updating unit status:", error);
+      toast.error("Fout bij het wijzigen van status");
     }
   };
 
@@ -409,6 +437,26 @@ export default function PaymentTracker({ run, users }) {
                           </>
                         );
                       })()}
+                      {/* Admin Status Selector */}
+                      <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded space-y-2">
+                        <Label className="text-xs text-blue-900 font-medium">Maandstatus wijzigen (admin)</Label>
+                        <Select
+                          value={getUnitStatus(month)}
+                          onValueChange={(newStatus) => handleUnitStatusChange(month, newStatus)}
+                        >
+                          <SelectTrigger className="w-full text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pending">⏳ Toekomstig</SelectItem>
+                            <SelectItem value="open">📂 Open</SelectItem>
+                            <SelectItem value="uitbetaald">✓ Uitbetaald</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-blue-700 mt-2">
+                          <strong>Let op:</strong> Als je deze maand op "Uitbetaald" zet, wordt volgende maand automatisch "Open"
+                        </p>
+                      </div>
                       {unitUsers.map(userId => {
                         const payment = getPaymentStatus(userId, month);
                         const userName = getUserName(userId);

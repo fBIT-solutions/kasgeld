@@ -4,7 +4,6 @@ import bcrypt from "bcryptjs";
 import { getItems, addItem, getContainer } from "./lib/cosmosdb";
 
 const containerId = "users";
-const container = await getContainer(containerId);
 
 export const authConfig = {
     providers: [
@@ -15,6 +14,9 @@ export const authConfig = {
             },
             async authorize(credentials) {
                 const { email, password } = credentials;
+
+                // Get container here, inside the function, not at module scope
+                const container = await getContainer(containerId);
 
                 const userQuery = await container.items
                     .query({
@@ -60,6 +62,7 @@ export const authConfig = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
+        token.email = user.email;
         token.firstname = user.firstname;
         token.lastname = user.lastname;
         token.displayname = user.displayname;
@@ -69,6 +72,7 @@ export const authConfig = {
     },
     async session({ session, token }) {
       session.user.id = token.id;
+      session.user.email = token.email;
       session.user.firstname = token.firstname;
       session.user.lastname = token.lastname;
       session.user.role = token.role;

@@ -3,74 +3,126 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 
-export function PaymentStatusBanner({ userEmail }) {
+/**
+ * Payment Status Banner Component
+ * 
+ * IMPORTANT: Payment system model
+ * - User must pay: monthlyAmount × (total hands across ALL runs)
+ * - Payment is due EVERY MONTH, regardless of unit payouts
+ * - Example: User with 2 hands pays €50 × 2 = €100 every month
+ */
+export function PaymentStatusBanner({ userEmail, userId }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [nextMonth, setNextMonth] = useState("");
+  const [handCount, setHandCount] = useState(0);
+  const [paymentAmount, setPaymentAmount] = useState(0);
 
   useEffect(() => {
-    const fetchPaymentStatus = async () => {
+    const checkPaymentStatus = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        // Get current month and NEXT month
-        const now = new Date();
-        const currentMonthNum = String(now.getMonth() + 1).padStart(2, "0");
-        const currentYear = now.getFullYear();
+        // Fetch all runs
+        const runsResponse = await fetch("/api/runs");
+        if (!runsResponse.ok) throw new Error("Failed to fetch runs");
 
-        // Calculate next month (where payment is needed)
-        const nextDate = new Date(now);
-        nextDate.setMonth(nextDate.getMonth() + 1);
-        const nextMonthNum = String(nextDate.getMonth() + 1).padStart(2, "0");
-        const nextYear = nextDate.getFullYear();
-        const nextMonthStr = `${nextMonthNum}-${nextYear}`;
-        setNextMonth(nextMonthStr);
+        const runs = await runsResponse.json();
 
-        console.log(`Next unit (payment due): ${nextMonthStr}`);
-        console.log("Fetching payment status for:", userEmail, nextMonthStr);
+        // Step 1: Find the OPEN month by looking for units with "open" status
+        let openMonth = null;
+        let runData = null;
 
-        // Fetch current user's payment for NEXT month
-        const response = await fetch(
-          `/api/payments?email=${encodeURIComponent(userEmail)}&month=${nextMonthStr}`
-        );
+        for (const run of runs) {
+          if (run.units && Array.isArray(run.units)) {
+            for (const unit of run.units) {
+              // Look for units with "open" status
+              if (unit.status === "open") {
+                openMonth = unit.name;  // Use unit.name, not unit.month!
+                runData = run;
+                break;
+              }
+            }
+            if (openMonth) break;
+          }
+        }
 
-        console.log("Payment response:", response.status, response.ok);
-
-        if (!response.ok) {
-          console.error("Payment fetch failed:", response.status);
-          setError("Kon betalingsstatus niet laden");
-          setStatus("unknown");
+        if (!openMonth) {
+          setStatus("none");
           setLoading(false);
           return;
         }
 
-        const payments = await response.json();
-        console.log("Payments data for next month:", payments);
+        setNextMonth(openMonth);
 
-        // Check if user has paid for NEXT month
-        let paidNextMonth = false;
+        // Step 2: Count TOTAL hands assigned to user across ALL runs
+        let totalHands = 0;
+        runs.forEach(run => {
+          if (run.units && Array.isArray(run.units)) {
+            run.units.forEach(unit => {
+              if (unit.assignedTo === userId) {
+                totalHands += (unit.hand || 1);  // Add unit.hand (could be > 1), default to 1
+              }
+            });
+          }
+        });
 
+        setHandCount(totalHands);
+
+        // If no hands assigned, don't show banner
+        if (totalHands === 0) {
+          setStatus("none");
+          setLoading(false);
+          return;
+        }
+
+        // Step 3: Calculate payment amount: monthlyAmount × total hands
+        const amount = (runData?.monthlyAmount || 0) * totalHands;
+        setPaymentAmount(amount);
+
+        // Step 4: Check if payment record exists for OPEN MONTH + this specific user
+        const paymentsResponse = await fetch(
+          `/api/payments?userId=${userId}&month=${openMonth}`
+        );
+
+        if (!paymentsResponse.ok) throw new Error("Failed to fetch payments");
+
+        const payments = await paymentsResponse.json();
+
+        // Check if payment is marked as received (paidDate exists)
+        let isPaid = false;
         if (Array.isArray(payments) && payments.length > 0) {
-          // If payments found with email filter
-          paidNextMonth = payments.some(
-            (p) => p.month === nextMonthStr && p.paidDate
-          );
-          console.log("Payment found for next month. Paid?", paidNextMonth);
+          isPaid = payments.some(p => p.paidDate);
         } else {
-          // No payments found - user may not have units assigned yet
-          console.log("No payments found for next month. User may not have units assigned yet.");
-          paidNextMonth = false; // Default: no payment found means "expected"
+          // No payment record - auto-create one if user has hands
+          try {
+            const autoCreateResponse = await fetch("/api/payments/auto-create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId,
+                email: userEmail,
+                month: openMonth,
+                amount: amount,
+                handCount: totalHands,
+              }),
+            });
+
+            if (autoCreateResponse.ok) {
+              const autoCreateData = await autoCreateResponse.json();
+              isPaid = false; // Newly created, not paid yet
+            } else {
+              // Auto-create failed - user likely has no hands
+            }
+          } catch (autoCreateErr) {
+            // Silently handle error
+          }
         }
 
-        if (paidNextMonth) {
-          setStatus("paid");
-        } else {
-          setStatus("unpaid");
-        }
+        setStatus(isPaid ? "paid" : "unpaid");
       } catch (err) {
-        console.error("Error fetching payment status:", err);
         setError(err.message);
         setStatus("unknown");
       } finally {
@@ -78,10 +130,10 @@ export function PaymentStatusBanner({ userEmail }) {
       }
     };
 
-    if (userEmail) {
-      fetchPaymentStatus();
+    if (userEmail && userId) {
+      checkPaymentStatus();
     }
-  }, [userEmail]);
+  }, [userEmail, userId]);
 
   // Show loading state
   if (loading) {
@@ -112,8 +164,8 @@ export function PaymentStatusBanner({ userEmail }) {
     );
   }
 
-  // Not loaded yet
-  if (!status) {
+  // Not loaded yet or no assignments for next month
+  if (!status || status === "none") {
     return null;
   }
 
@@ -132,9 +184,9 @@ export function PaymentStatusBanner({ userEmail }) {
           <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0" />
           <div>
             <p className="text-sm font-medium text-green-800">
-              Betaling voltooid voor {nextMonth}
+              Betaling ontvangen voor {nextMonth}
             </p>
-            <p className="text-xs text-green-700">Je bent goed bij kas! ✓</p>
+            <p className="text-xs text-green-700">Je inleg van €{paymentAmount.toFixed(2)} is ontvangen ✓</p>
           </div>
         </>
       ) : (
@@ -145,7 +197,7 @@ export function PaymentStatusBanner({ userEmail }) {
               Betaling verwacht voor {nextMonth}
             </p>
             <p className="text-xs text-orange-700">
-              Zorg ervoor dat je je aandeel betaalt via de aangegeven methode
+              Je schuldig: €{paymentAmount.toFixed(2)} ({handCount} {handCount === 1 ? "hand" : "handen"})
             </p>
           </div>
         </>

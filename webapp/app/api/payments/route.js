@@ -55,6 +55,7 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const runId = searchParams.get("runId");
     const email = searchParams.get("email");
+    const userId = searchParams.get("userId");
     const month = searchParams.get("month");
     
     const container = await getContainer(paymentsContainerId);
@@ -77,13 +78,18 @@ export async function GET(req) {
       return new Response(JSON.stringify(resources), { status: 200 });
     }
 
-    // Filter by email and/or month
-    if (email || month) {
+    // Filter by email, userId and/or month
+    if (email || userId || month) {
       // Get all payments and filter on client side
       const querySpec = {
         query: "SELECT * FROM c",
       };
       let { resources } = await container.items.query(querySpec).fetchAll();
+      
+      // Filter by userId if provided (highest priority - specific user)
+      if (userId) {
+        resources = resources.filter((p) => p.userId === userId);
+      }
       
       // Filter by email if provided
       if (email) {

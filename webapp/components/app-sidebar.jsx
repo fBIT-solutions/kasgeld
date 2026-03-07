@@ -44,11 +44,14 @@ import {
           </div>
         </SidebarHeader>
         <SidebarContent>
-          {session.data?.user?.email && (
-            <div className="px-4 py-3">
-              <PaymentStatusBanner userEmail={session.data.user.email} />
-            </div>
-          )}
+          {(() => {
+            const shouldShow = session.data?.user?.email && session.data?.user?.id;
+            return shouldShow ? (
+              <div className="px-4 py-3">
+                <PaymentStatusBanner userEmail={session.data.user.email} userId={session.data.user.id} />
+              </div>
+            ) : null;
+          })()}
           <SidebarGroup />
           <SidebarGroupContent>
             <SidebarMenu>

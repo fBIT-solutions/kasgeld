@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import SwapRequests from "@/components/swapRequests";
 import NextUnitTransaction from "@/components/nextUnitTransaction";
 import { UserMenu } from "@/components/user-menu";
+import { PaymentStatusBanner } from "@/components/payment-status-banner";
 
 import { SignInForm } from "@/components/signin_form";
 import Settings from "@/components/settings";
@@ -90,7 +91,16 @@ export default function Home() {
                 </div>
                 <div className="mt-2">
                     {(status === "authenticated") && (
-                        <div className="flex flex-col space-y-2">
+                        <div className="flex flex-col space-y-4">
+                            {/* Payment Status Banner */}
+                            {session?.user?.email && session?.user?.id && (
+                                <div className="mb-4">
+                                    <PaymentStatusBanner 
+                                        userEmail={session.user.email} 
+                                        userId={session.user.id} 
+                                    />
+                                </div>
+                            )}
                             {/* {components.filter((component) =>
                                 component.href === view) */}
                             {components.map((component) => (
