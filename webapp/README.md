@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Kasgeld
 
-## Getting Started
+A collaborative financial management application for shared expenses, unit assignments, and payment tracking.
 
-First, run the development server:
+## What is Kasgeld?
+
+Kasgeld helps groups (families, teams, organizations) manage shared financial contributions and distributions. Key features include:
+
+- **Unit Management**: Assign units (hands) to participants for specific months
+- **Payment Tracking**: Track who has paid their monthly contribution
+- **Payouts**: Calculate and distribute the monthly pot fairly
+- **Swap Requests**: Allow participants to swap assigned units
+- **Email Notifications**: Automated notifications for payments and unit assignments
+- **Admin Dashboard**: Comprehensive management interface for administrators
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+ 
+- npm or yarn
+- Environment variables (see [DEVELOPMENT.md](./DEVELOPMENT.md))
+
+### Installation
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+### Build for Production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run start
+```
 
-## Learn More
+## Documentation
 
-To learn more about Next.js, take a look at the following resources:
+- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Setup, development workflow, and contribution guidelines
+- **[Architecture](../docs/ARCHITECTURE.md)** - System design and data models
+- **[API Reference](../docs/API.md)** - Endpoint documentation
+- **[Deployment](../docs/DEPLOYMENT.md)** - Production deployment guide
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Frontend**: Next.js 15, React, TypeScript
+- **Backend**: Next.js API Routes
+- **Database**: Azure Cosmos DB
+- **Email**: Resend
+- **Auth**: NextAuth.js
+- **Styling**: Tailwind CSS + Radix UI
 
-## Deploy on Vercel
+## Core Concepts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Payments vs Payouts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+**Payments**: Monthly contribution per participant
+- Amount = (number of hands per participant) × (monthly rate)
+- Each participant pays based on their assigned units
+
+**Payouts (Pot)**: Total monthly distribution
+- Amount = (total hands in run) × (monthly rate)
+- Same amount paid to everyone with assigned units that month
+
+### Units, Hands & Months
+
+- **Hand**: Individual financial unit (smallest denomination)
+- **Unit**: Assignment of a hand to a participant for a specific month
+- **Month**: Time period (MM-YYYY format)
+- **Run**: A complete cycle with all months, users, and units
+
+## Key Files
+
+- `app/api/*` - API endpoints and business logic
+- `components/` - React components
+- `lib/` - Utilities (auth, database, email)
+- `app/beheer/` - Admin dashboard
+
+## License
+
+Proprietary - All rights reserved
+
+## Support
+
+For issues or questions, contact the development team.
