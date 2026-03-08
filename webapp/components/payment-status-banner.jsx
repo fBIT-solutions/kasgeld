@@ -197,7 +197,7 @@ export function PaymentStatusBanner({ userEmail, userId }) {
               Betaling verwacht voor {nextMonth}
             </p>
             <p className="text-xs text-orange-700">
-              Je schuldig: €{paymentAmount.toFixed(2)} ({handCount} {handCount === 1 ? "hand" : "handen"})
+             Verschuldigde inleg: €{paymentAmount.toFixed(2)} ({handCount} {handCount === 1 ? "hand" : "handen"})
             </p>
           </div>
         </>
