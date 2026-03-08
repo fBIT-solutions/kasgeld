@@ -141,7 +141,7 @@ export async function sendWelcomeEmail(options) {
         </div>
 
         <div style="text-align: center; margin: 20px 0;">
-          <a href="${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth" style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+          <a href="${process.env.NEXTAUTH_URL || "http://localhost:3000"}" style="display: inline-block; background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
             → Ga naar Kasgeld
           </a>
         </div>
@@ -179,7 +179,7 @@ Eerste stappen:
 4. Kies een sterk, persoonlijk wachtwoord
 
 Ga naar Kasgeld:
-${process.env.NEXTAUTH_URL || "http://localhost:3000"}/auth
+${process.env.NEXTAUTH_URL || "http://localhost:3000"}
 
 ⚠️ BELANGRIJK: Het OTP is slechts 24 uur geldig. Zorg dat je vandaag nog inlogt.
 
@@ -466,7 +466,7 @@ Dit is een automatische melding van het Kasgeld-systeem.
           </div>
 
           <div style="text-align: center; margin: 20px 0;">
-            <a href="${baseUrl}/dashboard" style="display: inline-block; background-color: #ff9800; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
+            <a href="${baseUrl}" style="display: inline-block; background-color: #ff9800; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">
               → Reageer op Verzoek
             </a>
           </div>
@@ -489,7 +489,7 @@ Hun unit: ${swapDetails.requesterUnit || 'N/A'}
 Ze willen: ${swapDetails.recipientUnit || 'N/A'}
 
 Ga naar dashboard:
-${baseUrl}/dashboard
+${baseUrl}
 
 Dit is een automatische melding van het Kasgeld-systeem.
     `;
