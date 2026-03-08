@@ -33,8 +33,16 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
 
   const isAdmin = session?.user?.role?.includes('admin');
 
+  // Sort months chronologically (MM-YYYY format)
+  const sortMonths = (a, b) => {
+    const [monthA, yearA] = a.split('-').map(Number);
+    const [monthB, yearB] = b.split('-').map(Number);
+    if (yearA !== yearB) return yearA - yearB;
+    return monthA - monthB;
+  };
+
   // Get all months and users for this run to create payment overview (calculated early for hooks)
-  const months = run?.units ? [...new Set(run.units.map(u => u.name))].sort() : [];
+  const months = run?.units ? [...new Set(run.units.map(u => u.name))].sort(sortMonths) : [];
   const unitUsers = run?.units ? [...new Set(run.units.map(u => u.assignedTo).filter(u => u))] : [];
 
   // Fetch payments for this run
@@ -44,12 +52,17 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
     }
   }, [run?.id]);
 
-  // Initialize selectedMonth to first month when months are available
+  // Initialize selectedMonth to first month with status "open", or first month if none have status "open"
   useEffect(() => {
     if (months.length > 0 && !selectedMonth) {
-      setSelectedMonth(months[0]);
+      // Find first month with units that have status "open"
+      const openMonth = months.find(month => {
+        const unitsInMonth = run?.units?.filter(u => u.name === month) || [];
+        return unitsInMonth.some(u => u.status === "open");
+      });
+      setSelectedMonth(openMonth || months[0]);
     }
-  }, [months.length, selectedMonth]);
+  }, [months.length, selectedMonth, run?.units]);
 
   const fetchPayments = async () => {
     try {
@@ -389,7 +402,7 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
               <Accordion 
                 type="single" 
                 collapsible 
-                defaultValue={months[0]} 
+                defaultValue={selectedMonth || months[0]} 
                 onValueChange={(value) => {
                   setSelectedMonth(value);
                   console.log("Selected month changed to:", value);
