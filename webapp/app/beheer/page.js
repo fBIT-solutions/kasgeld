@@ -51,6 +51,13 @@ export default function BeheerPage() {
   const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [clearAssignmentsDialogOpen, setClearAssignmentsDialogOpen] = useState(false);
+  
+  // Email states
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState('');
+  const [emailRecipientMode, setEmailRecipientMode] = useState('all'); // 'all' or 'selected'
+  const [emailSelectedRecipients, setEmailSelectedRecipients] = useState([]);
+  const [emailSending, setEmailSending] = useState(false);
 
   // Check admin role
   useEffect(() => {
@@ -155,6 +162,74 @@ export default function BeheerPage() {
     }, 0);
     
     return totalPerUser;
+  };
+
+  // Get participants of the selected run
+  const getRunParticipants = () => {
+    if (!selectedRun?.units) return [];
+    
+    // Get unique user IDs from units
+    const uniqueUserIds = [...new Set(selectedRun.units.map(u => u.assignedTo).filter(u => u))];
+    
+    // Map to user details
+    return uniqueUserIds
+      .map(userId => users.find(u => u.id === userId))
+      .filter(u => u) // Filter out undefined users
+      .map(u => ({
+        id: u.id,
+        name: [u.firstname, u.lastname].filter(Boolean).join(' ') || u.displayname || u.email,
+        email: u.email,
+      }));
+  };
+
+  // Send email to run participants
+  const handleSendEmail = async () => {
+    try {
+      setEmailSending(true);
+
+      // Determine recipients
+      let recipients = [];
+      if (emailRecipientMode === 'all') {
+        recipients = getRunParticipants();
+      } else {
+        recipients = getRunParticipants().filter(p => emailSelectedRecipients.includes(p.id));
+      }
+
+      if (recipients.length === 0) {
+        toast.error('Selecteer minimaal één ontvanger');
+        setEmailSending(false);
+        return;
+      }
+
+      const response = await fetch('/api/email/send-run-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject: emailSubject,
+          message: emailMessage,
+          recipients: recipients,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success(data.message);
+        // Reset form
+        setEmailSubject('');
+        setEmailMessage('');
+        setEmailRecipientMode('all');
+        setEmailSelectedRecipients([]);
+        setOpenModal(null);
+      } else {
+        toast.error(data.error || 'Fout bij verzenden van email');
+      }
+    } catch (error) {
+      console.error('Email send error:', error);
+      toast.error('Netwerkfout bij verzenden');
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   return (
@@ -757,14 +832,135 @@ export default function BeheerPage() {
         </Dialog>
 
         {/* Email Versturen Modal */}
-        <Dialog open={openModal === 'email'} onOpenChange={(open) => !open && setOpenModal(null)}>
-          <DialogContent className="max-w-2xl">
+        <Dialog open={openModal === 'email'} onOpenChange={(open) => {
+          if (!open) {
+            setOpenModal(null);
+            setEmailSubject('');
+            setEmailMessage('');
+            setEmailRecipientMode('all');
+            setEmailSelectedRecipients([]);
+          }
+        }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Email Versturen</DialogTitle>
-              <DialogDescription>Stuur een bericht naar alle deelnemers</DialogDescription>
+              <DialogDescription>Stuur een bericht naar deelnemers van deze run</DialogDescription>
             </DialogHeader>
-            <div className="text-sm text-gray-600 p-4 bg-blue-50 rounded mb-4">
-              ℹ️ Email functionaliteit kan via het Kasgeld Beheer paneel worden geconfigureerd
+            
+            <div className="space-y-4">
+              {/* Onderwerp */}
+              <div>
+                <Label htmlFor="email-subject" className="text-sm font-medium">Onderwerp *</Label>
+                <Input
+                  id="email-subject"
+                  placeholder="Bijv: Kasgeld bijdrage januari"
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  disabled={emailSending}
+                  className="mt-1"
+                />
+              </div>
+
+              {/* Bericht */}
+              <div>
+                <Label htmlFor="email-message" className="text-sm font-medium">Bericht *</Label>
+                <textarea
+                  id="email-message"
+                  placeholder="Typ uw bericht hier..."
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  disabled={emailSending}
+                  className="w-full min-h-[150px] p-2 border border-gray-300 rounded-md text-sm font-sans focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Recipients Selection */}
+              <div>
+                <Label className="text-sm font-medium mb-3 block">Ontvangers</Label>
+                <div className="space-y-3">
+                  {/* All recipients option */}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="email-all-recipients"
+                      checked={emailRecipientMode === 'all'}
+                      onCheckedChange={() => {
+                        setEmailRecipientMode('all');
+                        setEmailSelectedRecipients([]);
+                      }}
+                      disabled={emailSending}
+                    />
+                    <label htmlFor="email-all-recipients" className="text-sm cursor-pointer">
+                      Alle deelnemers ({getRunParticipants().length})
+                    </label>
+                  </div>
+
+                  {/* Specific recipients option */}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="email-specific-recipients"
+                      checked={emailRecipientMode === 'selected'}
+                      onCheckedChange={() => setEmailRecipientMode('selected')}
+                      disabled={emailSending}
+                    />
+                    <label htmlFor="email-specific-recipients" className="text-sm cursor-pointer">
+                      Selectieve deelnemers
+                    </label>
+                  </div>
+
+                  {/* Recipients list */}
+                  {emailRecipientMode === 'selected' && (
+                    <div className="border border-gray-200 rounded-md p-3 max-h-[200px] overflow-y-auto bg-gray-50">
+                      {getRunParticipants().length === 0 ? (
+                        <p className="text-xs text-gray-500">Geen deelnemers beschikbaar</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {getRunParticipants().map(participant => (
+                            <div key={participant.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`recipient-${participant.id}`}
+                                checked={emailSelectedRecipients.includes(participant.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setEmailSelectedRecipients([...emailSelectedRecipients, participant.id]);
+                                  } else {
+                                    setEmailSelectedRecipients(emailSelectedRecipients.filter(id => id !== participant.id));
+                                  }
+                                }}
+                                disabled={emailSending}
+                              />
+                              <label
+                                htmlFor={`recipient-${participant.id}`}
+                                className="text-xs cursor-pointer flex-1"
+                              >
+                                <span className="font-medium">{participant.name}</span>
+                                <span className="text-gray-500"> ({participant.email})</span>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Send Button */}
+              <div className="flex gap-2 pt-4">
+                <Button
+                  onClick={handleSendEmail}
+                  disabled={!emailSubject.trim() || !emailMessage.trim() || emailSending}
+                  className="flex-1"
+                >
+                  {emailSending ? 'Bezig met versturen...' : 'Email Versturen'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setOpenModal(null)}
+                  disabled={emailSending}
+                >
+                  Annuleren
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
