@@ -30,6 +30,10 @@ export async function POST(req)  {
     createdAt: new Date().toISOString(),
     role: data.role || ["default"],
     expires: data.expires ? new Date(data.expires).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Default to 7 days if not provided
+    preferences: {
+      preferredHands: data.preferences?.preferredHands || 1,
+      preferredMonths: data.preferences?.preferredMonths || []
+    }
   };
 
    // Add the user to the database

@@ -18,7 +18,11 @@ import AdminCalendar from "@/components/AdminCalendar";
 import UserCreationForm from "@/components/user-creation-form";
 import CreateKasgeldRun from "@/components/createKasgeldRun";
 import AppSettingsPanel from "@/components/app-settings-panel";
-import KasgeldManage from "@/components/kasgeldManage";
+import AutoAssignDialog from "@/components/kasgeldComponents/AutoAssignDialog";
+import ProcessingResultDialog from "@/components/kasgeldComponents/ProcessingResultDialog";
+import ViewReportDialog from "@/components/kasgeldComponents/ViewReportDialog";
+import ClearAssignmentsDialog from "@/components/kasgeldComponents/ClearAssignmentsDialog";
+import { processAutoAssignment, clearAllAssignments, createAutoAssignReport } from "@/components/kasgeldComponents/autoAssignUtils";
 import { ChevronDown, X, Eye, Zap } from "lucide-react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
@@ -41,13 +45,13 @@ export default function BeheerPage() {
   const [editUser, setEditUser] = useState(null);
   const [openUserDetails, setOpenUserDetails] = useState(false);
   const [openRolePopover, setOpenRolePopover] = useState(false);
+  const [openPreferencesDialog, setOpenPreferencesDialog] = useState(false);
   const roles = ["default", "guest", "member", "family", "worker", "admin"];
   
   // Auto-assign states
   const [autoAssignDialogOpen, setAutoAssignDialogOpen] = useState(false);
-  const [selectedUsers, setSelectedUsers] = useState([]);
-  const [userHandCounts, setUserHandCounts] = useState({});
-  const [userPreferences, setUserPreferences] = useState({});
+  const [processingResultOpen, setProcessingResultOpen] = useState(false);
+  const [processingResult, setProcessingResult] = useState(null);
   const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [clearAssignmentsDialogOpen, setClearAssignmentsDialogOpen] = useState(false);
@@ -123,26 +127,38 @@ export default function BeheerPage() {
     return editRun?.units?.some(unit => unit.assignedTo) || false;
   };
 
-  const resetAutoAssignState = () => {
-    setSelectedUsers([]);
-    setUserHandCounts({});
-    setUserPreferences({});
+  // Handler for auto-assign processing
+  const handleProcessAutoAssignment = (params) => {
+    const result = processAutoAssignment(editRun, params, users);
+    const report = createAutoAssignReport(result);
+    
+    const updatedRun = {
+      ...editRun,
+      units: result.updatedUnits,
+      autoAssignReports: [...(editRun.autoAssignReports || []), report]
+    };
+    
+    setEditRun(updatedRun);
+    setProcessingResult(result);
+    setProcessingResultOpen(true);
   };
 
-  const clearAllAssignments = () => {
-    const clearedUnits = editRun.units.map(unit => ({
-      ...unit,
-      assignedTo: null,
-      autoAssigned: undefined,
-      autoAssignReason: undefined
-    }));
+  // Handler for viewing reports
+  const handleViewReport = () => {
+    if (editRun?.autoAssignReports?.length > 0) {
+      setSelectedReport(editRun.autoAssignReports[editRun.autoAssignReports.length - 1]);
+      setViewReportDialogOpen(true);
+    }
+  };
 
-    const updatedEditRun = {
+  // Handler for clearing assignments
+  const handleClearAssignments = () => {
+    const clearedUnits = clearAllAssignments(editRun.units);
+    const updatedRun = {
       ...editRun,
       units: clearedUnits
     };
-
-    setEditRun(updatedEditRun);
+    setEditRun(updatedRun);
     setClearAssignmentsDialogOpen(false);
     toast.success("Alle toewijzingen verwijderd!");
   };
@@ -162,6 +178,44 @@ export default function BeheerPage() {
     }, 0);
     
     return totalPerUser;
+  };
+
+  // Recalculate units based on available hands and date range
+  const recalculateUnits = (run) => {
+    if (!run.start || !run.end || !run.unitsAvailable) return run.units || [];
+    
+    const startDate = dayjs(run.start);
+    const endDate = dayjs(run.end);
+    
+    // Calculate number of months between start and end
+    const monthDiff = endDate.diff(startDate, 'month') + 1; // +1 to include both start and end month
+    const unitsPerMonth = Math.ceil(parseInt(run.unitsAvailable) / monthDiff);
+    
+    const newUnits = [];
+    const now = new Date();
+    const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+    
+    for (let i = 0; i < monthDiff; i++) {
+      const monthDate = startDate.add(i, 'month');
+      const monthName = monthDate.format('MM-YYYY');
+      
+      // Determine status
+      let status = "pending";
+      if (monthName === currentMonth || (i === 0 && startDate.format('MM-YYYY') <= currentMonth)) {
+        status = "open";
+      }
+      
+      for (let j = 1; j <= unitsPerMonth; j++) {
+        newUnits.push({
+          name: monthName,
+          hand: j,
+          assignedTo: null,
+          status: status
+        });
+      }
+    }
+    
+    return newUnits;
   };
 
   // Get participants of the selected run
@@ -241,8 +295,18 @@ export default function BeheerPage() {
             <p className="text-gray-600 mt-2">Beheer betalingen, units en gebruikerstoewijzingen</p>
           </div>
           
-          {/* Admin Options Dropdown */}
-          <DropdownMenu>
+          <div className="flex gap-2">
+            {/* Back to Home Button */}
+            <Button
+              variant="outline"
+              onClick={() => router.push('/')}
+              className="gap-2"
+            >
+              ← Terug naar Home
+            </Button>
+
+            {/* Admin Options Dropdown */}
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="gap-2">
                 Admin Opties
@@ -273,24 +337,56 @@ export default function BeheerPage() {
 
         {/* Run Selector */}
         {runs.length > 0 && (
-          <div className="mb-8">
-            <Label className="text-sm font-medium mb-2">Selecteer een Run</Label>
-            <Select value={selectedRun?.id || ""} onValueChange={(runId) => {
-              const run = runs.find(r => r.id === runId);
-              setSelectedRun(run);
-              setEditRun(run);
-            }}>
-              <SelectTrigger className="w-full md:w-64">
-                <SelectValue placeholder="Kies een run..." />
-              </SelectTrigger>
-              <SelectContent>
-                {runs.map(run => (
-                  <SelectItem key={run.id} value={run.id}>
-                    {run.name || `Run ${run.year}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="mb-8 flex gap-4 items-end">
+            <div className="flex-1">
+              <Label className="text-sm font-medium mb-2">Selecteer een Run</Label>
+              <Select value={selectedRun?.id || ""} onValueChange={(runId) => {
+                const run = runs.find(r => r.id === runId);
+                setSelectedRun(run);
+                setEditRun(run);
+              }}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Kies een run..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {runs.map(run => (
+                    <SelectItem key={run.id} value={run.id}>
+                      {run.name || `Run ${run.year}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedRun && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  if (!window.confirm(`Weet je zeker dat je deze run wilt verwijderen? Dit kan niet ongedaan gemaakt worden.`)) {
+                    return;
+                  }
+                  try {
+                    const res = await fetch(`/api/runs?id=${selectedRun.id}`, {
+                      method: "DELETE",
+                    });
+                    if (res.ok) {
+                      toast.success("Run verwijderd!");
+                      const newRuns = runs.filter(r => r.id !== selectedRun.id);
+                      setRuns(newRuns);
+                      setSelectedRun(null);
+                      setEditRun(null);
+                    } else {
+                      toast.error("Fout bij verwijderen van run");
+                    }
+                  } catch (error) {
+                    console.error("Delete error:", error);
+                    toast.error("Netwerkfout");
+                  }
+                }}
+              >
+                🗑️ Verwijderen
+              </Button>
+            )}
           </div>
         )}
 
@@ -426,7 +522,11 @@ export default function BeheerPage() {
                         <Input
                           className="text-sm mt-1"
                           value={editRun.unitsAvailable || ""}
-                          onChange={(e) => setEditRun({ ...editRun, unitsAvailable: e.target.value })}
+                          onChange={(e) => {
+                            const updatedRun = { ...editRun, unitsAvailable: e.target.value };
+                            const newUnits = recalculateUnits(updatedRun);
+                            setEditRun({ ...updatedRun, units: newUnits });
+                          }}
                         />
                       </div>
                       <div>
@@ -435,7 +535,11 @@ export default function BeheerPage() {
                           className="text-sm mt-1"
                           type="date"
                           value={editRun.start ? dayjs(editRun.start).format("YYYY-MM-DD") : ""}
-                          onChange={(e) => setEditRun({ ...editRun, start: e.target.value })}
+                          onChange={(e) => {
+                            const updatedRun = { ...editRun, start: e.target.value };
+                            const newUnits = recalculateUnits(updatedRun);
+                            setEditRun({ ...updatedRun, units: newUnits });
+                          }}
                         />
                       </div>
                       <div>
@@ -444,7 +548,11 @@ export default function BeheerPage() {
                           className="text-sm mt-1"
                           type="date"
                           value={editRun.end ? dayjs(editRun.end).format("YYYY-MM-DD") : ""}
-                          onChange={(e) => setEditRun({ ...editRun, end: e.target.value })}
+                          onChange={(e) => {
+                            const updatedRun = { ...editRun, end: e.target.value };
+                            const newUnits = recalculateUnits(updatedRun);
+                            setEditRun({ ...updatedRun, units: newUnits });
+                          }}
                         />
                       </div>
                     </div>
@@ -489,7 +597,6 @@ export default function BeheerPage() {
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              resetAutoAssignState();
                               setAutoAssignDialogOpen(true);
                             }}
                             className="text-xs"
@@ -814,7 +921,14 @@ export default function BeheerPage() {
                             />
                           </div>
 
-                          <div className="flex gap-2 pt-2">
+                          <div className="flex gap-2 pt-2 flex-wrap">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setOpenPreferencesDialog(true)}
+                            >
+                              ⚙️ Voorkeuren
+                            </Button>
                             <Button
                               size="sm"
                               className="flex-1"
@@ -1018,86 +1132,137 @@ export default function BeheerPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Clear Assignments Confirmation Dialog */}
-        <Dialog open={clearAssignmentsDialogOpen} onOpenChange={setClearAssignmentsDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Toewijzingen verwijderen?</DialogTitle>
-              <DialogDescription>
-                Dit zal alle toewijzingen verwijderen. Dit kan niet ongedaan gemaakt worden.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex gap-2 justify-end pt-4">
-              <Button variant="outline" onClick={() => setClearAssignmentsDialogOpen(false)}>
-                Annuleren
-              </Button>
-              <Button variant="destructive" onClick={clearAllAssignments}>
-                Verwijderen
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Auto Assign Dialog */}
+        <AutoAssignDialog
+          open={autoAssignDialogOpen}
+          onOpenChange={setAutoAssignDialogOpen}
+          run={editRun}
+          users={users}
+          isAdmin={session?.user?.role?.includes("admin")}
+          onProcessAutoAssignment={handleProcessAutoAssignment}
+        />
+
+        {/* Processing Result Dialog */}
+        <ProcessingResultDialog
+          open={processingResultOpen}
+          onOpenChange={setProcessingResultOpen}
+          processingResult={processingResult}
+        />
 
         {/* View Report Dialog */}
-        <Dialog open={viewReportDialogOpen} onOpenChange={setViewReportDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <ViewReportDialog
+          open={viewReportDialogOpen}
+          onOpenChange={setViewReportDialogOpen}
+          selectedReport={selectedReport}
+        />
+
+        {/* Clear Assignments Confirmation Dialog */}
+        <ClearAssignmentsDialog
+          open={clearAssignmentsDialogOpen}
+          onOpenChange={setClearAssignmentsDialogOpen}
+          onClear={handleClearAssignments}
+        />
+
+        {/* User Preferences Dialog */}
+        <Dialog open={openPreferencesDialog} onOpenChange={setOpenPreferencesDialog}>
+          <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Auto-Assign Report</DialogTitle>
-              <DialogDescription>
-                Report van automatische toewijzing {selectedReport ? dayjs(selectedReport.timestamp).format('DD-MM-YYYY HH:mm') : ''}
-              </DialogDescription>
+              <DialogTitle>Gebruikersvoorkeuren</DialogTitle>
+              <DialogDescription>Stel voorkeuren in voor automatische toewijzing</DialogDescription>
             </DialogHeader>
-            {selectedReport && (
-              <div className="space-y-4 text-sm">
-                {/* Summary */}
-                <div className="grid grid-cols-4 gap-2">
-                  <div className="p-3 bg-blue-50 rounded">
-                    <div className="font-semibold text-blue-800">{selectedReport.summary.totalAssigned}</div>
-                    <div className="text-blue-600 text-xs">Toegewezen</div>
-                  </div>
-                  <div className="p-3 bg-yellow-50 rounded">
-                    <div className="font-semibold text-yellow-800">{selectedReport.summary.totalConflicts}</div>
-                    <div className="text-yellow-600 text-xs">Conflicten</div>
-                  </div>
-                  <div className="p-3 bg-green-50 rounded">
-                    <div className="font-semibold text-green-800">{selectedReport.summary.conflictsResolved}</div>
-                    <div className="text-green-600 text-xs">Opgelost</div>
-                  </div>
-                  <div className="p-3 bg-purple-50 rounded">
-                    <div className="font-semibold text-purple-800">{selectedReport.summary.usersProcessed}</div>
-                    <div className="text-purple-600 text-xs">Gebruikers</div>
+            {editUser && (
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium">Voorkeur aantal handen per run</Label>
+                  <div className="flex gap-2 mt-2">
+                    {[1, 2, 3, 4, 5, 6].map((num) => (
+                      <Button
+                        key={num}
+                        size="sm"
+                        variant={editUser.preferences?.preferredHands === num ? "default" : "outline"}
+                        onClick={() => setEditUser({
+                          ...editUser,
+                          preferences: {
+                            ...editUser.preferences,
+                            preferredHands: num
+                          }
+                        })}
+                      >
+                        {num}
+                      </Button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Assignments */}
-                {selectedReport.assignments.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold mb-2">Toewijzingen</h4>
-                    <div className="space-y-1 max-h-64 overflow-y-auto">
-                      {selectedReport.assignments.map((a, i) => (
-                        <div key={i} className="p-2 bg-gray-50 rounded text-xs">
-                          <div>{a.userName} → {a.month} (Hand {a.hand})</div>
-                          <div className="text-gray-500">{a.reason}</div>
+                <div>
+                  <Label className="text-sm font-medium mb-3 block">
+                    Voorkeur uitbetalingsmaanden (max 3)
+                  </Label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {[
+                      { value: '01', label: 'Januari' },
+                      { value: '02', label: 'Februari' },
+                      { value: '03', label: 'Maart' },
+                      { value: '04', label: 'April' },
+                      { value: '05', label: 'Mei' },
+                      { value: '06', label: 'Juni' },
+                      { value: '07', label: 'Juli' },
+                      { value: '08', label: 'Augustus' },
+                      { value: '09', label: 'September' },
+                      { value: '10', label: 'Oktober' },
+                      { value: '11', label: 'November' },
+                      { value: '12', label: 'December' },
+                    ].map((month) => {
+                      const isSelected = editUser.preferences?.preferredMonths?.includes(month.value);
+                      const canSelect = isSelected || (editUser.preferences?.preferredMonths?.length || 0) < 3;
+                      
+                      return (
+                        <div key={month.value} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`month-${month.value}`}
+                            checked={isSelected}
+                            disabled={!canSelect}
+                            onCheckedChange={(checked) => {
+                              let newMonths = editUser.preferences?.preferredMonths || [];
+                              if (checked) {
+                                newMonths = [...newMonths, month.value];
+                              } else {
+                                newMonths = newMonths.filter(m => m !== month.value);
+                              }
+                              setEditUser({
+                                ...editUser,
+                                preferences: {
+                                  ...editUser.preferences,
+                                  preferredMonths: newMonths
+                                }
+                              });
+                            }}
+                          />
+                          <label
+                            htmlFor={`month-${month.value}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            {month.label}
+                          </label>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
-                )}
+                  {(editUser.preferences?.preferredMonths?.length || 0) > 0 && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      {editUser.preferences?.preferredMonths?.length} van 3 geselecteerd
+                    </p>
+                  )}
+                </div>
 
-                {/* Conflicts */}
-                {selectedReport.conflicts.length > 0 && (
-                  <div>
-                    <h4 className="font-semibold mb-2 text-yellow-700">Conflicten</h4>
-                    <div className="space-y-1 max-h-64 overflow-y-auto">
-                      {selectedReport.conflicts.map((c, i) => (
-                        <div key={i} className="p-2 bg-yellow-50 rounded text-xs">
-                          <div>{c.userName} → {c.month}</div>
-                          <div className="text-gray-500">{c.reason}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    className="flex-1"
+                    onClick={() => setOpenPreferencesDialog(false)}
+                  >
+                    Gereed
+                  </Button>
+                </div>
               </div>
             )}
           </DialogContent>
