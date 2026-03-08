@@ -1,5 +1,5 @@
 import { getContainer } from "../../../lib/cosmosdb";
-import { sendRejectionEmail } from "../../../lib/email-service";
+import { sendRejectionEmail, sendRegistrationRequestEmail } from "../../../lib/email-service";
 
 const registrationContainerId = "registration-requests";
 
@@ -47,6 +47,24 @@ export async function POST(req) {
     };
 
     const { resource } = await container.items.create(newRequest);
+
+    // Send notification to admin
+    try {
+      const adminEmail = process.env.ADMIN_EMAIL || "admin@kasgeld.nl";
+      const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+      
+      await sendRegistrationRequestEmail({
+        adminEmail,
+        applicantName: `${firstName} ${lastName}`,
+        applicantEmail: email,
+        reason: referrer || "Geen reden vermeld",
+        baseUrl
+      });
+    } catch (emailError) {
+      console.error("Failed to send registration request notification:", emailError);
+      // Don't fail the request if email fails
+    }
+
     return new Response(JSON.stringify({ success: true, message: "Registratieverzoek ingediend. We nemen contact op zodra het is beoordeeld." }), { status: 201 });
   } catch (error) {
     return new Response(JSON.stringify({ error: "Fout bij het indienen van registratieverzoek", details: error.message }), { status: 500 });

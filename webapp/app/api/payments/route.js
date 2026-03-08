@@ -1,6 +1,31 @@
 import { getContainer } from "../../../lib/cosmosdb";
+import { sendUnitPaidEmail } from "../../../lib/email-service";
 
 const paymentsContainerId = "payments";
+const runsContainerId = "runs";
+const usersContainerId = "users";
+
+async function getUserById(userId) {
+  try {
+    const container = await getContainer(usersContainerId);
+    const { resource } = await container.item(userId, userId).read();
+    return resource;
+  } catch (error) {
+    console.error(`Failed to get user ${userId}:`, error);
+    return null;
+  }
+}
+
+async function getRunById(runId) {
+  try {
+    const container = await getContainer(runsContainerId);
+    const { resource } = await container.item(runId, runId).read();
+    return resource;
+  } catch (error) {
+    console.error(`Failed to get run ${runId}:`, error);
+    return null;
+  }
+}
 
 export async function POST(req) {
   try {
@@ -24,8 +49,56 @@ export async function POST(req) {
           paidDate: paid ? (paidDate || new Date().toISOString()) : null,
         };
         const { resource } = await container.item(id, id).replace(updatedPayment);
+
+        // Send notification if payment was just marked as paid
+        if (paid && !existingPayment.paid) {
+          console.log(`Payment ${id} marked as paid, attempting to send email...`);
+          console.log(`User ID: ${userId}, Email: ${email}, ExistingPayment.paid: ${existingPayment.paid}`);
+          
+          try {
+            if (!userId) {
+              console.error("No userId provided in payment update request");
+            } else {
+              const user = await getUserById(userId);
+              console.log(`User lookup result:`, user);
+              
+              if (!user) {
+                console.error(`User ${userId} not found in database`);
+              } else if (!user.email) {
+                console.error(`User ${userId} has no email address`);
+              } else {
+                const run = await getRunById(runId);
+                console.log(`Run lookup result:`, run);
+                
+                // Extract hand number from month string (e.g., "Hand 2" from "04-2026")
+                const monthParts = month?.split('-') || [];
+                const monthName = monthParts[0] ? `${monthParts[0]}-${monthParts[1]}` : month;
+                
+                // Calculate total pot: sum of all hands in run × monthly amount per hand
+                const totalHands = run?.units?.reduce((sum, u) => sum + (u.hand || 1), 0) || 0;
+                const totalPot = (totalHands * (run?.monthlyAmount || 0));
+                
+                console.log(`Sending unit paid email to ${user.email}, total pot: €${totalPot} (${totalHands} hands × €${run?.monthlyAmount})`);
+                await sendUnitPaidEmail({
+                  recipientEmail: user.email,
+                  recipientName: user.firstname || user.displayname || "Deelnemer",
+                  handNumber: handCount || "N/A",
+                  month: monthParts[0] || monthName,
+                  year: monthParts[1] || run.year || "2026",
+                  amount: totalPot
+                });
+                console.log(`Email sent successfully for payment ${id}`);
+              }
+            }
+          } catch (emailError) {
+            console.error("Failed to send unit paid notification:", emailError);
+            // Don't fail the request if email fails
+          }
+        }
+
         return new Response(JSON.stringify(resource), { status: 200 });
       } catch (readError) {
+        console.error("Error reading payment:", readError);
         return new Response(JSON.stringify({ error: "Betaling niet gevonden" }), { status: 404 });
       }
     } else {
@@ -46,6 +119,7 @@ export async function POST(req) {
       return new Response(JSON.stringify(resource), { status: 201 });
     }
   } catch (error) {
+    console.error("Error in POST /api/payments:", error);
     return new Response(JSON.stringify({ error: "Fout bij het beheren van betaling", details: error.message }), { status: 500 });
   }
 }

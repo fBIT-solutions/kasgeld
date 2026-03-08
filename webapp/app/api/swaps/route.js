@@ -1,6 +1,19 @@
 import { getContainer } from "@/lib/cosmosdb";
+import { sendSwapRequestReceivedEmail, sendSwapRequestReviewedEmail } from "@/lib/email-service";
 
 const containerId = "swaps";
+const usersContainerId = "users";
+
+async function getUserById(userId) {
+  try {
+    const container = await getContainer(usersContainerId);
+    const { resource } = await container.item(userId, userId).read();
+    return resource;
+  } catch (error) {
+    console.error(`Failed to get user ${userId}:`, error);
+    return null;
+  }
+}
 
 export async function POST(req) {
   try {
@@ -26,6 +39,29 @@ export async function POST(req) {
     };
 
     const { resource } = await container.items.create(swapRequest);
+
+    // Send notifications
+    try {
+      const requesterUser = await getUserById(data.requesterUserId);
+      const targetedUser = await getUserById(data.targetedUserId);
+
+      if (requesterUser?.email && targetedUser?.email) {
+        await sendSwapRequestReceivedEmail({
+          requesterEmail: requesterUser.email,
+          requesterName: requesterUser.firstname || requesterUser.displayname || "Deelnemer",
+          recipientEmail: targetedUser.email,
+          recipientName: targetedUser.firstname || targetedUser.displayname || "Deelnemer",
+          swapDetails: {
+            requesterUnit: data.requesterUnitName,
+            recipientUnit: data.targetedUnitName,
+          }
+        });
+      }
+    } catch (emailError) {
+      console.error("Failed to send swap notifications:", emailError);
+      // Don't fail the request if emails fail
+    }
+
     return new Response(JSON.stringify(resource), { status: 201 });
   } catch (error) {
     console.error("Error creating swap request:", error);
@@ -91,6 +127,27 @@ export async function PUT(req) {
     console.log("Updated Swap:", updatedSwap);
 
     const { resource } = await container.item(id, id).replace(updatedSwap);
+
+    // Send notification if status changed to approved or rejected
+    if (data.status && data.status !== existingSwap.status) {
+      try {
+        const requesterUser = await getUserById(existingSwap.requesterUserId);
+        
+        if (requesterUser?.email) {
+          await sendSwapRequestReviewedEmail({
+            requesterEmail: requesterUser.email,
+            requesterName: requesterUser.firstname || requesterUser.displayname || "Deelnemer",
+            recipientName: existingSwap.targetedUserDisplayName,
+            status: data.status,
+            message: data.note || ""
+          });
+        }
+      } catch (emailError) {
+        console.error("Failed to send swap review notification:", emailError);
+        // Don't fail the request if email fails
+      }
+    }
+
     return new Response(JSON.stringify(resource), { status: 200 });
   } catch (error) {
     console.error("Error updating swap request:", error);
