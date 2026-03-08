@@ -131,7 +131,9 @@ const handleSwapRequest = async () => {
 
         const swapData = {
             requesterUserId: session.user.id,
+            requesterDisplayName: session.user.displayname || session.user.email,
             targetedUserId: targetUser.id,
+            targetedUserDisplayName: targetUser.displayname,
             note: swapNote,
             runId: selectedEvent.runId,
             requesterUnitName: userUnit.unitName,

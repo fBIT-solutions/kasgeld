@@ -7,6 +7,7 @@ import SwapRequests from "@/components/swapRequests";
 import NextUnitTransaction from "@/components/nextUnitTransaction";
 import { UserMenu } from "@/components/user-menu";
 import { PaymentStatusBanner } from "@/components/payment-status-banner";
+import NotificationBadge from "@/components/notification-badge";
 import { Button } from "@/components/ui/button";
 
 import { SignInForm } from "@/components/signin_form";
@@ -79,7 +80,12 @@ export default function Home() {
             <div className="p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold">Welkom @ Mavis Balker Kasgeld</h1>
-                    {status === "authenticated" && <UserMenu />}
+                    {status === "authenticated" && (
+                        <div className="flex items-center gap-4">
+                            <NotificationBadge />
+                            <UserMenu />
+                        </div>
+                    )}
                 </div>
                 <div className="mt-2">
                     {(status === "authenticated") && (
