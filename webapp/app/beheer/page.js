@@ -333,6 +333,7 @@ export default function BeheerPage() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </div>
 
         {/* Run Selector */}
@@ -787,32 +788,63 @@ export default function BeheerPage() {
               <DialogDescription>Selecteer een deelnemer om te bewerken</DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
-              {/* Participant Select */}
-              <div>
+              {/* Participant Select with Actions Menu */}
+              <div className="space-y-2">
                 <Label htmlFor="participant-select">Deelnemer selecteren</Label>
-                <Select
-                  value={selectedUser?.id || ""}
-                  onValueChange={(userId) => {
-                    const user = users.find(u => u.id === userId);
-                    setSelectedUser(user);
-                    setOpenUserDetails(true);
-                    setEditUser({ 
-                      ...user, 
-                      role: Array.isArray(user.role) ? user.role : [user.role].filter(r => r) 
-                    });
-                  }}
-                >
-                  <SelectTrigger id="participant-select">
-                    <SelectValue placeholder="Kies een deelnemer..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users?.map(u => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.firstname} {u.lastname}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select
+                    value={selectedUser?.id || ""}
+                    onValueChange={(userId) => {
+                      const user = users.find(u => u.id === userId);
+                      setSelectedUser(user);
+                      setOpenUserDetails(true);
+                      setEditUser({ 
+                        ...user, 
+                        role: Array.isArray(user.role) ? user.role : [user.role].filter(r => r) 
+                      });
+                    }}
+                  >
+                    <SelectTrigger id="participant-select" className="flex-1">
+                      <SelectValue placeholder="Kies een deelnemer..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users?.map(u => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {u.firstname} {u.lastname}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* User Actions Menu */}
+                  {selectedUser && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="gap-2">
+                          Acties
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setEditUser({ 
+                              ...selectedUser, 
+                              role: Array.isArray(selectedUser.role) ? selectedUser.role : [selectedUser.role].filter(r => r) 
+                            });
+                            setOpenPreferencesDialog(true);
+                          }}
+                        >
+                          ⚙️ Voorkeuren
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => setOpenUserDetails(true)}>
+                          ✏️ Bewerken
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
               </div>
 
               {/* Edit Details Popover */}

@@ -2,10 +2,12 @@
 
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LogOut, Edit2, Loader } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,6 +16,13 @@ import {
   DropdownMenuTrigger,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { ContactMessageButton } from "@/components/contact-message-button";
@@ -25,6 +34,25 @@ export function UserMenu() {
   const [displayname, setDisplayname] = useState(session?.user?.displayname || "");
   const [isSaving, setIsSaving] = useState(false);
   const [open, setOpen] = useState(false);
+  const [openPreferencesDialog, setOpenPreferencesDialog] = useState(false);
+  const [editUser, setEditUser] = useState(null);
+  const [isSavingPreferences, setIsSavingPreferences] = useState(false);
+  const [isLoadingPreferences, setIsLoadingPreferences] = useState(false);
+
+  const months = [
+    { value: "01", label: "Jan" },
+    { value: "02", label: "Feb" },
+    { value: "03", label: "Mrt" },
+    { value: "04", label: "Apr" },
+    { value: "05", label: "Mei" },
+    { value: "06", label: "Jun" },
+    { value: "07", label: "Jul" },
+    { value: "08", label: "Aug" },
+    { value: "09", label: "Sep" },
+    { value: "10", label: "Okt" },
+    { value: "11", label: "Nov" },
+    { value: "12", label: "Dec" },
+  ];
 
   if (!session?.user) {
     return null;
@@ -85,6 +113,75 @@ export function UserMenu() {
       toast.error("Fout bij het bijwerken van displaynaam");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleOpenPreferences = () => {
+    setOpenPreferencesDialog(true);
+  };
+
+  // Load fresh preferences from database when dialog opens
+  useEffect(() => {
+    if (openPreferencesDialog && session?.user?.id) {
+      setIsLoadingPreferences(true);
+      setEditUser(null);
+
+      const fetchPreferences = async () => {
+        try {
+          const response = await fetch(`/api/users?id=${encodeURIComponent(session.user.id)}`);
+          if (response.ok) {
+            const user = await response.json();
+            setEditUser({
+              ...user,
+              preferences: user.preferences || { preferredHands: 1, preferredMonths: [] },
+            });
+          } else {
+            console.error("Failed to fetch preferences");
+            setEditUser({
+              ...session.user,
+              preferences: session.user.preferences || { preferredHands: 1, preferredMonths: [] },
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching preferences:", error);
+          setEditUser({
+            ...session.user,
+            preferences: session.user.preferences || { preferredHands: 1, preferredMonths: [] },
+          });
+        } finally {
+          setIsLoadingPreferences(false);
+        }
+      };
+      fetchPreferences();
+    }
+  }, [openPreferencesDialog, session?.user?.id]);
+
+  const handleSavePreferences = async () => {
+    try {
+      setIsSavingPreferences(true);
+
+      const response = await fetch(`/api/users?id=${encodeURIComponent(session.user.id)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editUser),
+      });
+
+      if (response.ok) {
+        const updated = await response.json();
+        await updateSession({
+          ...session,
+          user: updated,
+        });
+        toast.success("Voorkeuren opgeslagen!");
+        setOpenPreferencesDialog(false);
+      } else {
+        toast.error("Fout bij opslaan voorkeuren");
+      }
+    } catch (error) {
+      console.error("Error saving preferences:", error);
+      toast.error("Fout bij opslaan voorkeuren");
+    } finally {
+      setIsSavingPreferences(false);
     }
   };
 
@@ -175,6 +272,15 @@ export function UserMenu() {
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
+            handleOpenPreferences();
+          }}
+          className="cursor-pointer"
+        >
+          ⚙️ Voorkeuren
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => {
             setOpen(false);
             signOut({ redirect: true, callbackUrl: "/" });
           }}
@@ -184,6 +290,120 @@ export function UserMenu() {
           Uitloggen
         </DropdownMenuItem>
       </DropdownMenuContent>
+
+      {/* User Preferences Dialog */}
+      <Dialog open={openPreferencesDialog} onOpenChange={setOpenPreferencesDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mijn Voorkeuren</DialogTitle>
+            <DialogDescription>Stel je voorkeuren in voor automatische toewijzing</DialogDescription>
+          </DialogHeader>
+
+          {isLoadingPreferences ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : editUser ? (
+            <div className="space-y-6">
+              {/* Preferred Hands */}
+              <div className="space-y-3">
+                <Label>Voorkeur aantal handen</Label>
+                <div className="flex gap-2 flex-wrap">
+                  {[1, 2, 3, 4, 5, 6].map((num) => (
+                    <Button
+                      key={num}
+                      variant={editUser.preferences?.preferredHands === num ? "default" : "outline"}
+                      onClick={() => {
+                        setEditUser({
+                          ...editUser,
+                          preferences: {
+                            ...editUser.preferences,
+                            preferredHands: num,
+                          },
+                        });
+                      }}
+                    >
+                      {num}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preferred Months */}
+              <div className="space-y-3">
+                <Label>Voorkeur maanden (max 3)</Label>
+                <div className="grid grid-cols-3 gap-3">
+                  {months.map((month) => {
+                    const isSelected = editUser.preferences?.preferredMonths?.includes(month.value);
+                    const canSelect = isSelected || (editUser.preferences?.preferredMonths?.length || 0) < 3;
+
+                    return (
+                      <div key={month.value} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`month-${month.value}`}
+                          checked={isSelected}
+                          disabled={!canSelect}
+                          onCheckedChange={() => {
+                            if (isSelected || (editUser.preferences?.preferredMonths?.length || 0) < 3) {
+                              let newMonths = editUser.preferences?.preferredMonths || [];
+                              if (isSelected) {
+                                newMonths = newMonths.filter((m) => m !== month.value);
+                              } else {
+                                newMonths = [...newMonths, month.value];
+                              }
+                              setEditUser({
+                                ...editUser,
+                                preferences: {
+                                  ...editUser.preferences,
+                                  preferredMonths: newMonths,
+                                },
+                              });
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`month-${month.value}`}
+                          className="text-sm cursor-pointer"
+                        >
+                          {month.label}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </div>
+                {(editUser.preferences?.preferredMonths?.length || 0) > 0 && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    {editUser.preferences?.preferredMonths?.length} van 3 geselecteerd
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <Button
+                  className="flex-1"
+                  onClick={handleSavePreferences}
+                  disabled={isSavingPreferences}
+                >
+                  {isSavingPreferences && <Loader className="mr-2 h-4 w-4 animate-spin" />}
+                  Opslaan
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setOpenPreferencesDialog(false)}
+                  disabled={isSavingPreferences}
+                >
+                  Annuleren
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground">
+              Fout bij laden van voorkeuren
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DropdownMenu>
   );
 }

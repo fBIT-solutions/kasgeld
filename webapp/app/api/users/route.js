@@ -3,8 +3,28 @@ import { getItems, addItem, getContainer } from "../../../lib/cosmosdb";
 const containerId = "users";
 
 export async function GET(req) {
+    const { searchParams } = new URL(req.url);
     const container = await getContainer(containerId);
+    const id = searchParams.get("id");
 
+    // If specific user ID requested, return only that user
+    if (id) {
+        try {
+            const { resource: user } = await container.item(id, id).read();
+            if (!user) {
+                return new Response(JSON.stringify({ message: "User niet gevonden" }), { status: 404 });
+            }
+            return new Response(JSON.stringify(user), { status: 200 });
+        } catch (error) {
+            console.error("Error fetching user:", error);
+            return new Response(
+                JSON.stringify({ error: "Fout bij het ophalen van de user", details: error.message }),
+                { status: 500 }
+            );
+        }
+    }
+
+    // Otherwise return all active users
     const userQuery = await container.items
         .query({
             query: "SELECT * FROM c WHERE c.expires > @now OR NOT IS_DEFINED(c.expires)",
