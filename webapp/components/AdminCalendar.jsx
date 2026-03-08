@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -13,12 +13,54 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
-export default function AdminCalendar({ run, users, payments = [], onChangeRun, onUpdatePayments }) {
+export default function AdminCalendar({ run, users, payments = [], onChangeRun, onUpdatePayments, onRefreshPayments }) {
   const [openStatusDialog, setOpenStatusDialog] = useState(null);
+  const [paymentsInitialized, setPaymentsInitialized] = useState(false);
+
+  // Initialize payments when component mounts or run changes
+  useEffect(() => {
+    if (run?.id && run?.units && !paymentsInitialized) {
+      initializePayments();
+    }
+  }, [run?.id, paymentsInitialized]);
+
+  const initializePayments = async () => {
+    try {
+      console.log("Initializing payments for run:", run.id);
+      const res = await fetch("/api/payments/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          runId: run.id,
+          units: run.units,
+        }),
+      });
+      const data = await res.json();
+      console.log("Payment initialization result:", data);
+      
+      // Refresh payments after initialization
+      if (onRefreshPayments) {
+        await onRefreshPayments();
+      }
+      
+      setPaymentsInitialized(true);
+    } catch (error) {
+      console.error("Error initializing payments:", error);
+    }
+  };
 
   if (!run?.units || run.units.length === 0) {
     return <div className="text-gray-500">Geen units beschikbaar</div>;
   }
+
+  // Get ALL unique participants in this run (users who have any units in any month)
+  const allParticipantsInRun = [...new Set(run.units.map(u => u.assignedTo).filter(u => u))];
+
+  // Helper: Get participants WITH units assigned in a specific month
+  const getParticipantsInMonth = (month) => {
+    const monthUnits = unitsByMonth[month] || [];
+    return [...new Set(monthUnits.map(u => u.assignedTo).filter(u => u))];
+  };
 
   // Group units by month
   const unitsByMonth = {};
@@ -46,12 +88,6 @@ export default function AdminCalendar({ run, users, payments = [], onChangeRun, 
   };
 
   // Helper: Get unique user names in a month
-  const getUserNamesInMonth = (month) => {
-    const unitsInMonth = unitsByMonth[month] || [];
-    const userIds = [...new Set(unitsInMonth.map(u => u.assignedTo).filter(u => u))];
-    return userIds.map(userId => getUserName(userId));
-  };
-
   const getStatusColor = (status) => {
     switch (status) {
       case "open":
@@ -66,27 +102,34 @@ export default function AdminCalendar({ run, users, payments = [], onChangeRun, 
   };
 
   const getUnpaidCount = (month) => {
-    // Get user IDs that have units in this run
-    const unitsInMonth = unitsByMonth[month] || [];
-    const userIdsInMonth = [...new Set(unitsInMonth.map(u => u.assignedTo).filter(u => u))];
+    // Count how many participants in the RUN have NOT paid for this month
+    const runPayments = payments.filter(p => p.runId === run.id);
     
-    // Count how many of those users have NOT paid for this month
-    return userIdsInMonth.filter(userId => {
-      const payment = payments.find(p => p.userId === userId && p.month === month);
+    const unpaid = allParticipantsInRun.filter(userId => {
+      const payment = runPayments.find(p => p.userId === userId && p.month === month);
       return !payment || payment.paid === false;
     }).length;
+    
+    console.log(`Unpaid for ${month}:`, {
+      totalParticipants: allParticipantsInRun.length,
+      unpaidCount: unpaid,
+      paidCount: allParticipantsInRun.length - unpaid,
+      payments: payments.filter(p => p.runId === run.id && p.month === month),
+    });
+    
+    return unpaid;
   };
 
   const getPaidCount = (month) => {
-    // Get user IDs that have units in this run
-    const unitsInMonth = unitsByMonth[month] || [];
-    const userIdsInMonth = [...new Set(unitsInMonth.map(u => u.assignedTo).filter(u => u))];
+    // Count how many participants in the RUN have paid for this month
+    const runPayments = payments.filter(p => p.runId === run.id);
     
-    // Count how many of those users have paid for this month
-    return userIdsInMonth.filter(userId => {
-      const payment = payments.find(p => p.userId === userId && p.month === month);
+    const paid = allParticipantsInRun.filter(userId => {
+      const payment = runPayments.find(p => p.userId === userId && p.month === month);
       return payment?.paid === true;
     }).length;
+    
+    return paid;
   };
 
   const handleStatusChange = async (monthName, newStatus) => {
@@ -125,6 +168,7 @@ export default function AdminCalendar({ run, users, payments = [], onChangeRun, 
         {months.map((month) => {
           const unitsInMonth = unitsByMonth[month];
           const firstUnit = unitsInMonth[0];
+          const participantsInMonth = getParticipantsInMonth(month);
           const paidCount = getPaidCount(month);
           const unpaidCount = getUnpaidCount(month);
 
@@ -198,14 +242,24 @@ export default function AdminCalendar({ run, users, payments = [], onChangeRun, 
                   <span className="font-semibold">{unitsInMonth.length}</span>
                 </div>
                 <div className="space-y-1">
-                  <div className="text-gray-600 text-xs">Deelnemers:</div>
+                  <div className="text-gray-600 text-xs">Deelnemers met eenheden ({participantsInMonth.length}):</div>
                   <div className="text-xs text-gray-700 flex flex-wrap gap-1">
-                    {getUserNamesInMonth(month).map((name, idx) => (
-                      <span key={idx} className="bg-gray-200 px-2 py-1 rounded">
-                        {name}
-                      </span>
-                    ))}
+                    {participantsInMonth.length > 0 ? (
+                      participantsInMonth.map((userId, idx) => (
+                        <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-semibold">
+                          {getUserName(userId)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-gray-400 italic">Geen deelnemers met eenheden</span>
+                    )}
                   </div>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Betalingen:</span>
+                  <Badge variant="outline" className="text-xs">
+                    {paidCount}/{allParticipantsInRun.length}
+                  </Badge>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Openstaand:</span>

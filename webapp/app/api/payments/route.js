@@ -104,7 +104,12 @@ export async function GET(req) {
       return new Response(JSON.stringify(resources), { status: 200 });
     }
 
-    return new Response(JSON.stringify([]), { status: 200 });
+    // No filters - return all payments
+    const querySpec = {
+      query: "SELECT * FROM c",
+    };
+    const { resources } = await container.items.query(querySpec).fetchAll();
+    return new Response(JSON.stringify(resources), { status: 200 });
   } catch (error) {
     return new Response(JSON.stringify({ error: "Fout bij het ophalen van betalingen", details: error.message }), { status: 500 });
   }

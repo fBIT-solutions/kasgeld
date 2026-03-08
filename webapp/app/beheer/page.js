@@ -367,6 +367,12 @@ export default function BeheerPage() {
                     onUpdatePayments={(updatedPayment) => {
                       setPayments(payments.map(p => p.id === updatedPayment.id ? updatedPayment : p));
                     }}
+                    onRefreshPayments={async () => {
+                      const paymentsRes = await fetch("/api/payments");
+                      if (paymentsRes.ok) {
+                        setPayments(await paymentsRes.json());
+                      }
+                    }}
                   />
                 ) : (
                   <p className="text-gray-500">Geen actieve run gevonden</p>
@@ -556,8 +562,44 @@ export default function BeheerPage() {
                                   body: JSON.stringify(editRun),
                                 });
                                 if (res.ok) {
+                                  console.log("Run saved successfully. Initializing payments...", {
+                                    runId: editRun.id,
+                                    unitCount: editRun.units?.length,
+                                    assignedUserCount: editRun.units?.filter(u => u.assignedTo).length,
+                                  });
+                                  
+                                  // Initialize payment records
+                                  try {
+                                    const initRes = await fetch(`/api/payments/initialize`, {
+                                      method: "POST",
+                                      headers: {
+                                        "Content-Type": "application/json",
+                                      },
+                                      body: JSON.stringify({
+                                        runId: editRun.id,
+                                        units: editRun.units,
+                                      }),
+                                    });
+                                    const initData = await initRes.json();
+                                    console.log("Payment initialization response:", initData);
+                                  } catch (paymentError) {
+                                    console.error("Payment initialization error:", paymentError);
+                                  }
+
                                   setRuns(runs.map(r => r.id === selectedRun.id ? editRun : r));
                                   setSelectedRun(editRun);
+                                  
+                                  // Refetch payments
+                                  const paymentsRes = await fetch("/api/payments");
+                                  if (paymentsRes.ok) {
+                                    const paymentsData = await paymentsRes.json();
+                                    console.log("Payments after refetch:", {
+                                      totalPayments: paymentsData?.length,
+                                      forThisRun: paymentsData?.filter(p => p.runId === editRun.id)?.length,
+                                    });
+                                    setPayments(paymentsData);
+                                  }
+                                  
                                   toast.success("Run bijgewerkt!");
                                 } else {
                                   toast.error("Fout bij bijwerken");
