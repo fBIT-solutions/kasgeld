@@ -19,6 +19,7 @@ import UserCreationForm from "@/components/user-creation-form";
 import CreateKasgeldRun from "@/components/createKasgeldRun";
 import AppSettingsPanel from "@/components/app-settings-panel";
 import AutoAssignDialog from "@/components/kasgeldComponents/AutoAssignDialog";
+import AssignmentDraftsPanel from "@/components/kasgeldComponents/AssignmentDraftsPanel";
 import ProcessingResultDialog from "@/components/kasgeldComponents/ProcessingResultDialog";
 import ViewReportDialog from "@/components/kasgeldComponents/ViewReportDialog";
 import ClearAssignmentsDialog from "@/components/kasgeldComponents/ClearAssignmentsDialog";
@@ -55,6 +56,7 @@ export default function BeheerPage() {
   const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [clearAssignmentsDialogOpen, setClearAssignmentsDialogOpen] = useState(false);
+  const [assignmentDraftsTrigger, setAssignmentDraftsTrigger] = useState(0);
   
   // Email states
   const [emailSubject, setEmailSubject] = useState('');
@@ -141,6 +143,9 @@ export default function BeheerPage() {
     setEditRun(updatedRun);
     setProcessingResult(result);
     setProcessingResultOpen(true);
+    
+    // Trigger refresh of assignment drafts panel
+    setAssignmentDraftsTrigger(prev => prev + 1);
   };
 
   // Handler for viewing reports
@@ -557,6 +562,21 @@ export default function BeheerPage() {
                         />
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+
+                {/* Assignment Drafts Panel */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Toewijzingsbeheer</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <AssignmentDraftsPanel 
+                      runId={selectedRun?.id}
+                      users={users}
+                      isAdmin={true}
+                      refreshTrigger={assignmentDraftsTrigger}
+                    />
                   </CardContent>
                 </Card>
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,9 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Users, Info } from "lucide-react";
+import { AlertTriangle, Users, Info, Save, CheckCircle, Loader } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 export default function AutoAssignDialog({
     open,
@@ -27,6 +28,65 @@ export default function AutoAssignDialog({
     const [selectedUsers, setSelectedUsers] = useState([]);
     const [userHandCounts, setUserHandCounts] = useState({});
     const [userPreferences, setUserPreferences] = useState({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [savedAssignmentId, setSavedAssignmentId] = useState(null);
+    const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+
+    // Load saved assignment when dialog opens
+    useEffect(() => {
+        if (open && run?.id) {
+            loadSavedAssignment();
+        }
+    }, [open, run?.id]);
+
+    const loadSavedAssignment = async () => {
+        setIsLoadingDraft(true);
+        try {
+            const response = await fetch(`/api/unit-assignments?runId=${encodeURIComponent(run.id)}`);
+            if (!response.ok) throw new Error("Fout bij laden van opgeslagen toewijzingen");
+            
+            const assignments = await response.json();
+            
+            // Get the most recent draft assignment
+            const draftAssignment = assignments.find(a => a.status === "draft");
+            
+            if (draftAssignment) {
+                // Load the assignment data into the form
+                setSavedAssignmentId(draftAssignment.id);
+                
+                // Reset and populate state from saved assignment
+                setSelectedUsers(draftAssignment.assignments.map(a => a.userId));
+                
+                const handCounts = {};
+                const monthPrefs = {};
+                
+                draftAssignment.assignments.forEach(assignment => {
+                    handCounts[assignment.userId] = assignment.handCount;
+                    
+                    // Convert saved months (e.g., "04") to full format (e.g., "04-2026")
+                    if (assignment.preferredMonths?.length > 0) {
+                        const availableMonths = getAvailableMonths();
+                        const matchedMonths = availableMonths.filter(availMonth => {
+                            const monthPart = availMonth.split('-')[0];
+                            return assignment.preferredMonths.includes(monthPart);
+                        });
+                        if (matchedMonths.length > 0) {
+                            monthPrefs[assignment.userId] = matchedMonths;
+                        }
+                    }
+                });
+                
+                setUserHandCounts(handCounts);
+                setUserPreferences(monthPrefs);
+                toast.success("Opgeslagen toewijzing geladen!");
+            }
+        } catch (error) {
+            console.error("Error loading saved assignment:", error);
+            // Don't show error toast, just silently continue
+        } finally {
+            setIsLoadingDraft(false);
+        }
+    };
 
     // Get available months from current run
     const getAvailableMonths = () => {
@@ -79,11 +139,22 @@ export default function AutoAssignDialog({
                         }));
                     }
                     // Set month preferences from user preferences
+                    // Match saved preferences (e.g., "04") with available months (e.g., "04-2026")
                     if (user.preferences.preferredMonths?.length > 0) {
-                        setUserPreferences(prev => ({
-                            ...prev,
-                            [userId]: user.preferences.preferredMonths
-                        }));
+                        const availableMonths = getAvailableMonths();
+                        const matchedMonths = availableMonths.filter(availMonth => {
+                            // Extract month part from "04-2026" format
+                            const monthPart = availMonth.split('-')[0];
+                            // Check if this month is in user's preferences
+                            return user.preferences.preferredMonths.includes(monthPart);
+                        });
+                        
+                        if (matchedMonths.length > 0) {
+                            setUserPreferences(prev => ({
+                                ...prev,
+                                [userId]: matchedMonths
+                            }));
+                        }
                     }
                 }
             } else if (prev.includes(userId) && !newSelection.includes(userId)) {
@@ -127,18 +198,111 @@ export default function AutoAssignDialog({
         });
     };
 
-    // Handle processing
-    const handleProcess = () => {
-        onProcessAutoAssignment({
-            selectedUsers,
-            userHandCounts,
-            userPreferences
-        });
-        // Reset state
-        setSelectedUsers([]);
-        setUserHandCounts({});
-        setUserPreferences({});
-        onOpenChange(false);
+    // Handle save as draft
+    const handleSaveDraft = async () => {
+        if (!isAssignmentValid()) {
+            toast.error("Toewijzing is niet geldig!");
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const assignments = selectedUsers.map(userId => ({
+                userId,
+                handCount: parseInt(userHandCounts[userId]) || 0,
+                // Convert months back to "MM" format (e.g., "04-2026" → "04")
+                preferredMonths: (userPreferences[userId] || []).map(month => month.split('-')[0])
+            }));
+
+            // If we have a saved assignment, update it; otherwise create a new one
+            if (savedAssignmentId) {
+                const response = await fetch(`/api/unit-assignments?id=${encodeURIComponent(savedAssignmentId)}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        assignments
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Fout bij het bijwerken van toewijzing");
+                }
+
+                toast.success("Toewijzing bijgewerkt!");
+            } else {
+                const response = await fetch("/api/unit-assignments", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        runId: run.id,
+                        assignments,
+                        createdBy: "admin"
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Fout bij het opslaan van toewijzing");
+                }
+
+                const savedAssignment = await response.json();
+                setSavedAssignmentId(savedAssignment.id);
+                toast.success("Toewijzing opgeslagen als concept!");
+            }
+        } catch (error) {
+            console.error("Error saving draft:", error);
+            toast.error("Fout bij het opslaan van toewijzing");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // Handle process assignment (change status to active)
+    const handleProcess = async () => {
+        if (!isAssignmentValid()) {
+            toast.error("Toewijzing is niet geldig!");
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            // If we have a saved draft, update it to active
+            if (savedAssignmentId) {
+                const response = await fetch(`/api/unit-assignments?id=${encodeURIComponent(savedAssignmentId)}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        status: "active"
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error("Fout bij het activeren van toewijzing");
+                }
+            }
+
+            // Call the parent callback to process the assignments
+            // Convert months back to "MM" format for processing
+            const convertedPreferences = Object.fromEntries(
+                Object.entries(userPreferences).map(([userId, months]) => [
+                    userId,
+                    months.map(month => month.split('-')[0])
+                ])
+            );
+
+            onProcessAutoAssignment({
+                selectedUsers,
+                userHandCounts,
+                userPreferences: convertedPreferences
+            });
+
+            toast.success("Toewijzing verwerkt!");
+            handleClose();
+        } catch (error) {
+            console.error("Error processing assignment:", error);
+            toast.error("Fout bij het verwerken van toewijzing");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     // Handle close
@@ -146,6 +310,7 @@ export default function AutoAssignDialog({
         setSelectedUsers([]);
         setUserHandCounts({});
         setUserPreferences({});
+        setSavedAssignmentId(null);
         onOpenChange(false);
     };
 
@@ -156,6 +321,9 @@ export default function AutoAssignDialog({
                     <DialogTitle className="flex items-center gap-2">
                         <Users className="h-5 w-5" />
                         Automatisch toewijzen
+                        {savedAssignmentId && !isLoadingDraft && (
+                            <Badge variant="secondary" className="text-xs">Concept geladen</Badge>
+                        )}
                     </DialogTitle>
                     <DialogDescription>
                         Selecteer deelnemers om handen aan toe te wijzen.
@@ -173,33 +341,42 @@ export default function AutoAssignDialog({
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="flex flex-col flex-1 min-h-0 space-y-4">
-                    {/* Summary - Fixed section */}
-                    <div className="flex-shrink-0 space-y-3">
-                        {/* Assignment Status */}
-                        {hasAssignments() && (
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div className="text-center p-2 bg-blue-50 border border-blue-200 rounded">
-                                    <div className="font-semibold text-blue-800">{getTotalAssignedHands()}</div>
-                                    <div className="text-blue-600 text-xs">Toegewezen</div>
-                                </div>
-                                <div className="text-center p-2 bg-yellow-50 border border-yellow-200 rounded">
-                                    <div className="font-semibold text-yellow-800">{getTotalAvailableHands()}</div>
-                                    <div className="text-yellow-600 text-xs">Beschikbaar</div>
-                                </div>
-                            </div>
-                        )}
+                {/* Loading state */}
+                {isLoadingDraft && (
+                    <div className="flex items-center justify-center py-8">
+                        <Loader className="h-6 w-6 animate-spin text-blue-600 mr-2" />
+                        <span className="text-sm text-muted-foreground">Opgeslagen toewijzing laden...</span>
+                    </div>
+                )}
 
-                        {/* Request Summary */}
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                            <div className="text-center p-2 bg-gray-50 rounded">
-                                <div className="font-semibold">{getTotalAvailableHands()}</div>
-                                <div className="text-xs text-muted-foreground">Beschikbaar</div>
-                            </div>
-                            <div className="text-center p-2 bg-gray-50 rounded">
-                                <div className="font-semibold">{getTotalHandsRequested()}</div>
-                                <div className="text-xs text-muted-foreground">Gevraagde Handen</div>
-                            </div>
+                {!isLoadingDraft && (
+                    <div className="flex flex-col flex-1 min-h-0 space-y-4">
+                        {/* Summary - Fixed section */}
+                        <div className="flex-shrink-0 space-y-3">
+                            {/* Assignment Status */}
+                            {hasAssignments() && (
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div className="text-center p-2 bg-blue-50 border border-blue-200 rounded">
+                                        <div className="font-semibold text-blue-800">{getTotalAssignedHands()}</div>
+                                        <div className="text-blue-600 text-xs">Toegewezen</div>
+                                    </div>
+                                    <div className="text-center p-2 bg-yellow-50 border border-yellow-200 rounded">
+                                        <div className="font-semibold text-yellow-800">{getTotalAvailableHands()}</div>
+                                        <div className="text-yellow-600 text-xs">Beschikbaar</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Request Summary */}
+                            <div className="grid grid-cols-3 gap-4 text-sm">
+                                <div className="text-center p-2 bg-gray-50 rounded">
+                                    <div className="font-semibold">{getTotalAvailableHands()}</div>
+                                    <div className="text-xs text-muted-foreground">Beschikbaar</div>
+                                </div>
+                                <div className="text-center p-2 bg-gray-50 rounded">
+                                    <div className="font-semibold">{getTotalHandsRequested()}</div>
+                                    <div className="text-xs text-muted-foreground">Gevraagde Handen</div>
+                                </div>
                             <div className="text-center p-2 bg-gray-50 rounded">
                                 <div className={`font-semibold ${isAssignmentValid() ? 'text-green-600' : 'text-red-600'}`}>
                                     {getTotalAvailableHands() - getTotalHandsRequested()}
@@ -283,21 +460,48 @@ export default function AutoAssignDialog({
                     </div>
 
                     {/* Fixed buttons at bottom */}
-                    <div className="flex-shrink-0 flex justify-end gap-2 pt-4 border-t">
-                        <Button
-                            variant="outline"
-                            onClick={handleClose}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleProcess}
-                            disabled={!isAssignmentValid()}
-                        >
-                            Process Assignment
-                        </Button>
+                    <div className="flex-shrink-0 flex justify-between gap-2 pt-4 border-t">
+                        <div className="flex gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={handleClose}
+                                disabled={isSaving}
+                            >
+                                Annuleren
+                            </Button>
+                            {savedAssignmentId && (
+                                <Button
+                                    variant="ghost"
+                                    onClick={loadSavedAssignment}
+                                    disabled={isSaving}
+                                    className="text-xs"
+                                >
+                                    ↻ Terugzetten
+                                </Button>
+                            )}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="secondary"
+                                onClick={handleSaveDraft}
+                                disabled={!isAssignmentValid() || isSaving}
+                                className="gap-2"
+                            >
+                                <Save className="h-4 w-4" />
+                                Opslaan als concept
+                            </Button>
+                            <Button
+                                onClick={handleProcess}
+                                disabled={!isAssignmentValid() || isSaving}
+                                className="gap-2"
+                            >
+                                <CheckCircle className="h-4 w-4" />
+                                Verwerken
+                            </Button>
+                        </div>
                     </div>
                 </div>
+                )}
             </DialogContent>
         </Dialog>
     );
