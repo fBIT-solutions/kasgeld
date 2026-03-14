@@ -80,9 +80,19 @@ const MonthGridCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
     };
 
     // Get user display name
+    const isAdmin = session?.user?.role?.includes('admin');
     const getUserDisplayName = (userId) => {
         const user = users?.find(u => u.id === userId);
-        return user?.displayname || user?.firstname || 'Onbekend';
+        if (!user) return 'Onbekend';
+        
+        // For admins: show full name with display name
+        if (isAdmin) {
+            const fullName = [user.firstname, user.lastname].filter(Boolean).join(' ') || user.displayname;
+            return fullName || 'Onbekend';
+        }
+        
+        // For non-admins: show display name, fallback to anonymous if missing
+        return user.displayname || 'Anoniem';
     };
 
     // Handle unit click
@@ -139,7 +149,9 @@ const MonthGridCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
 
             const swapData = {
                 requesterUserId: session.user.id,
+                requesterDisplayName: session.user.displayname || session.user.email,
                 targetedUserId: targetUser.id,
+                targetedUserDisplayName: targetUser.displayname,
                 note: swapNote,
                 runId: selectedEvent.runId,
                 requesterUnitName: userUnit.unitName,

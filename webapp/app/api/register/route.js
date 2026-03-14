@@ -2,11 +2,11 @@ import bcrypt from "bcryptjs";
 import { getItems, addItem, getContainer } from "../../../lib/cosmosdb";
 
 const containerId = "users";
-const container = await getContainer(containerId);
 
 export async function POST(req)  {
   if (req.method !== "POST") return new response({status: 405});
 
+  const container = await getContainer(containerId);
   const data = await req.json();
     if (!data.email || !data.password) {
         return new Response(JSON.stringify({ message: "Email and password are required" }), { status: 400 });
@@ -25,10 +25,15 @@ export async function POST(req)  {
     email,
     firstname: data.firstname || "",
     lastname: data.lastname || "",
+    displayname: data.displayname || "",
     password: hashed,
     createdAt: new Date().toISOString(),
     role: data.role || ["default"],
     expires: data.expires ? new Date(data.expires).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Default to 7 days if not provided
+    preferences: {
+      preferredHands: data.preferences?.preferredHands || 1,
+      preferredMonths: data.preferences?.preferredMonths || []
+    }
   };
 
    // Add the user to the database

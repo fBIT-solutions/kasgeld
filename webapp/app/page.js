@@ -5,9 +5,12 @@ import { useSession } from "next-auth/react";
 import React, { useEffect, useState } from "react";
 import SwapRequests from "@/components/swapRequests";
 import NextUnitTransaction from "@/components/nextUnitTransaction";
+import { UserMenu } from "@/components/user-menu";
+import { PaymentStatusBanner } from "@/components/payment-status-banner";
+import NotificationBadge from "@/components/notification-badge";
+import { Button } from "@/components/ui/button";
 
 import { SignInForm } from "@/components/signin_form";
-import Settings from "@/components/settings";
 import EventsPage from "./events/page";
 import dayjs from "dayjs";
 
@@ -54,14 +57,6 @@ export default function Home() {
             roles: ["member", "admin", "family"],
         },
         {
-            title: "Beheer",
-            href: "/settings",
-            description:
-                "Beheer Kasgeld runs en leden.",
-            element: ({ users, runs, onChangeUsers, onChangeRuns }) => <Settings users={users} runs={runs} onChangeUsers={onChangeUsers} onChangeRuns={onChangeRuns} className="" />,
-            roles: ["admin"],
-        },
-        {
             title: "Kalender",
             href: "/events",
             description:
@@ -83,12 +78,36 @@ export default function Home() {
     return (
         <main className="w-full min-h-screen h-screen">
             <div className="p-6">
-                <div className="">
-                    <h1 className="p-2 text-center text-3xl font-bold">Welkom @ Mavis Balker Kasgeld</h1>
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold">Welkom @ Mavis Balker Kasgeld</h1>
+                    {status === "authenticated" && (
+                        <div className="flex items-center gap-4">
+                            <NotificationBadge />
+                            <UserMenu />
+                        </div>
+                    )}
                 </div>
                 <div className="mt-2">
                     {(status === "authenticated") && (
-                        <div className="flex flex-col space-y-2">
+                        <div className="flex flex-col space-y-4">
+                            {/* Admin Beheer Button */}
+                            {session?.user?.role?.includes("admin") && (
+                                <Button 
+                                    onClick={() => router.push("/beheer")}
+                                    className="w-full bg-purple-600 hover:bg-purple-700"
+                                >
+                                    Beheer Kasgeld (Admin)
+                                </Button>
+                            )}
+                            {/* Payment Status Banner */}
+                            {session?.user?.email && session?.user?.id && (
+                                <div className="mb-4">
+                                    <PaymentStatusBanner 
+                                        userEmail={session.user.email} 
+                                        userId={session.user.id} 
+                                    />
+                                </div>
+                            )}
                             {/* {components.filter((component) =>
                                 component.href === view) */}
                             {components.map((component) => (

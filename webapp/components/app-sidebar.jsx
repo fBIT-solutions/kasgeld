@@ -1,10 +1,12 @@
 "use client";
 
 import { useView } from "@/context/ViewContext";
-import { signOut, useSession } from "next-auth/react";
-import { Calendar, Home, Settings, LogOutIcon, LogInIcon } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Calendar, Home, Settings, LogInIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { UserMenu } from "@/components/user-menu";
+import { PaymentStatusBanner } from "@/components/payment-status-banner";
 import {
     Sidebar,
     SidebarContent,
@@ -31,15 +33,25 @@ import {
     const { setView } = useView();
     return (
       <Sidebar variant="sidebar" collapsible="icon" >
-        <SidebarHeader >
+        <SidebarHeader className="flex flex-row items-center justify-between">
           <SidebarTrigger className="hover:text-green-800 "/>
-          { session.data?.user?.id ? (
-          <Button variant="ghost" onClick={() => {signOut()}}><LogOutIcon /></Button>
-          ) : (
-            <Button variant="ghost" onClick={() => {router.push("/signin")}}><LogInIcon /></Button>
-          )}
-          </SidebarHeader>
+          <div className="flex items-center gap-2">
+            { session.data?.user?.id ? (
+              <UserMenu />
+            ) : (
+              <Button variant="ghost" onClick={() => {router.push("/signin")}}><LogInIcon /></Button>
+            )}
+          </div>
+        </SidebarHeader>
         <SidebarContent>
+          {(() => {
+            const shouldShow = session.data?.user?.email && session.data?.user?.id;
+            return shouldShow ? (
+              <div className="px-4 py-3">
+                <PaymentStatusBanner userEmail={session.data.user.email} userId={session.data.user.id} />
+              </div>
+            ) : null;
+          })()}
           <SidebarGroup />
           <SidebarGroupContent>
             <SidebarMenu>

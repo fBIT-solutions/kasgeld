@@ -50,6 +50,15 @@ const MyCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
     const [swapNote, setSwapNote] = useState("")
 
 
+// Helper function to get display name based on admin status
+const getDisplayName = (user) => {
+    const isAdmin = session?.user?.role?.includes('admin');
+    if (isAdmin) {
+        return user?.displayname || `${user?.firstname} ${user?.lastname}`.trim() || 'Onbekend';
+    }
+    return user?.displayname || 'Anoniem';
+};
+
 useEffect(() => {
     // Transform runs.units into calendar events
     let calendarEvents = [];
@@ -68,7 +77,7 @@ useEffect(() => {
                         let assignedUserName = null;
                         if (unit.assignedTo && users && Array.isArray(users)) {
                             const assignedUser = users.find(user => user.id === unit.assignedTo);
-                            assignedUserName = assignedUser?.displayname || null;
+                            assignedUserName = getDisplayName(assignedUser);
                         }
                         
                         calendarEvents.push({
@@ -91,7 +100,7 @@ useEffect(() => {
     }
     
     setCalendarItems(calendarEvents);
-}, [users, runs]);
+}, [users, runs, session?.user?.role]);
 
 // Function to get units assigned to the current user
 const getUserAssignedUnits = () => {
@@ -131,7 +140,9 @@ const handleSwapRequest = async () => {
 
         const swapData = {
             requesterUserId: session.user.id,
+            requesterDisplayName: session.user.displayname || session.user.email,
             targetedUserId: targetUser.id,
+            targetedUserDisplayName: targetUser.displayname,
             note: swapNote,
             runId: selectedEvent.runId,
             requesterUnitName: userUnit.unitName,
@@ -264,7 +275,7 @@ return (
                 <DialogHeader>
                     <DialogTitle>Ruil verzoek</DialogTitle>
                     <DialogDescription>
-                        Vraag om jouw hand te ruilen met {selectedEvent?.assignedTo}
+                        Vraag om jouw hand te ruilen met {getDisplayName({ displayname: selectedEvent?.assignedTo })}
                     </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -273,7 +284,7 @@ return (
                         <div className="p-3 bg-gray-50 rounded">
                             <strong>{selectedEvent?.unitName}</strong> - Hand {selectedEvent?.hand}
                             <br />
-                            <small>Toegewezen aan: {selectedEvent?.assignedTo}</small>
+                            <small>Toegewezen aan: {getDisplayName({ displayname: selectedEvent?.assignedTo })}</small>
                         </div>
                     </div>
                     

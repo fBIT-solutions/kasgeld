@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import dayjs from "dayjs";
 
-export function createKasgeldRun({ onSuccess }) {
+export default function CreateKasgeldRun({ onSuccess }) {
     const form = useForm({
         defaultValues: {
             year: dayjs().add(1, 'year').format('YYYY'),
@@ -27,10 +27,36 @@ export function createKasgeldRun({ onSuccess }) {
             end: values.end,
             units: [],
         };
-        const transactionAMonth = values.unitsAvailable / 12;
-        for (let i = 1; i <= 12; i++) {
-            for (let j = 1; j <= parseInt(transactionAMonth); j++) {
-                data.units.push({ name: `${dayjs(values.start).add(i, 'month').format('MM-YYYY')}`, hand: j, assignedTo: null });
+        
+        // Calculate number of months between start and end (inclusive)
+        const startDate = dayjs(values.start);
+        const endDate = dayjs(values.end);
+        const monthDiff = endDate.diff(startDate, 'month') + 1;
+        
+        // Calculate units per month based on total available hands
+        const unitsPerMonth = Math.ceil(parseInt(values.unitsAvailable) / monthDiff);
+        
+        const now = new Date();
+        const currentMonth = `${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
+        
+        // Generate units for each month
+        for (let i = 0; i < monthDiff; i++) {
+            const monthDate = startDate.add(i, 'month');
+            const monthName = monthDate.format('MM-YYYY');
+            
+            // Set first available month to "open", rest to "pending"
+            let status = "pending";
+            if (monthName === currentMonth || (i === 0 && startDate.format('MM-YYYY') <= currentMonth)) {
+              status = "open";
+            }
+            
+            for (let j = 1; j <= unitsPerMonth; j++) {
+                data.units.push({ 
+                  name: monthName, 
+                  hand: j, 
+                  assignedTo: null,
+                  status: status
+                });
             }
         }
 
@@ -125,12 +151,4 @@ export function createKasgeldRun({ onSuccess }) {
             </Form>
         </div>
     );
-}
-//     else {
-//         return (<></>);
-//     }
-// }
-
-export default function CreateKasgeldRun(props) {
-    return createKasgeldRun(props);
 }
