@@ -91,8 +91,8 @@ const MonthGridCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
             return fullName || 'Onbekend';
         }
         
-        // For non-admins: show display name
-        return user.displayname || user.firstname || 'Onbekend';
+        // For non-admins: show display name, fallback to anonymous if missing
+        return user.displayname || 'Anoniem';
     };
 
     // Handle unit click

@@ -35,7 +35,7 @@ export async function POST(req) {
       id: crypto.randomUUID(),
       firstName,
       lastName,
-      displayName,
+      displayname: displayName,
       email,
       handsCount: handsCount ? parseInt(handsCount) : 0,
       referrer: referrer || "",

@@ -44,7 +44,7 @@ export async function POST(req, { params }) {
       email: registrationRequest.email,
       firstname: registrationRequest.firstName,
       lastname: registrationRequest.lastName,
-      displayName: registrationRequest.displayName,
+      displayname: registrationRequest.displayname || registrationRequest.displayName,
       handsCount: registrationRequest.handsCount,
       referrer: registrationRequest.referrer || "",
       role: ["member", "default"],
