@@ -10,6 +10,7 @@ import { Loader2, Save } from "lucide-react";
 
 export default function AppSettingsPanel() {
   const [adminEmail, setAdminEmail] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -23,6 +24,7 @@ export default function AppSettingsPanel() {
       const response = await fetch("/api/settings/get-config");
       const data = await response.json();
       setAdminEmail(data.adminEmail || "");
+      setPaymentUrl(data.paymentUrl || "");
     } catch (error) {
       console.error("Error fetching settings:", error);
       toast.error("Fout bij ophalen van instellingen");
@@ -55,6 +57,7 @@ export default function AppSettingsPanel() {
         },
         body: JSON.stringify({
           adminEmail,
+          paymentUrl,
         }),
       });
 
@@ -95,6 +98,21 @@ export default function AppSettingsPanel() {
             />
             <p className="text-xs text-gray-500 mt-2">
               Dit adres ontvangt berichten van gebruikers en notifications
+            </p>
+          </div>
+          <div>
+            <Label htmlFor="payment-url">Betaal URL</Label>
+            <Input
+              id="payment-url"
+              type="url"
+              placeholder="https://example.com/payment"
+              value={paymentUrl}
+              onChange={(e) => setPaymentUrl(e.target.value)}
+              disabled={isLoading || isSaving}
+              required
+            />
+            <p className="text-xs text-gray-500 mt-2">
+             Geef hier een betaallink op zodat deelnemers hun inleg kunnen voldoen.
             </p>
           </div>
 
