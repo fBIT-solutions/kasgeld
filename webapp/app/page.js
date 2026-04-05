@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { SignInForm } from "@/components/signin_form";
 import EventsPage from "./events/page";
 import dayjs from "dayjs";
+import { Currency, BanknoteArrowDownIcon } from "lucide-react";
 
 
 export default function Home() {
@@ -23,6 +24,7 @@ export default function Home() {
     const date = dayjs().startOf('week').format('YYYY-MM-DD');
     const [runs, setRuns] = useState([]);
     const [users, setUsers] = useState([]);
+    const [settings, setSettings] = useState({});
 
     useEffect(() => {
         async function fetchEvents() {
@@ -31,7 +33,15 @@ export default function Home() {
                 setRuns(await res.json());
             }
         }
+        async function fetchSettings() {
+            const res = await fetch("/api/settings/get-config");
+            if (res.ok) {
+                const data = await res.json();
+                setSettings(data);
+            }
+        }
         fetchEvents();
+        fetchSettings();
     }, []);
 
     useEffect(() => {
@@ -76,67 +86,84 @@ export default function Home() {
     ]
 
     return (
-        <main className="w-full min-h-screen h-screen">
-            <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold">Welkom @ Mavis Balker Kasgeld</h1>
-                    {status === "authenticated" && (
-                        <div className="flex items-center gap-4">
-                            <NotificationBadge />
-                            <UserMenu />
-                        </div>
+      <main className="w-full min-h-screen h-screen">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-3xl font-bold">
+              Welkom @ Mavis Balker Kasgeld
+            </h1>
+            {status === "authenticated" && (
+              <div className="flex items-center gap-4">
+                <NotificationBadge />
+                <UserMenu />
+              </div>
+            )}
+          </div>
+          <div className="mt-2">
+            {status === "authenticated" && (
+              <div className="flex flex-col space-y-4">
+                {/* Admin Beheer Button */}
+                {session?.user?.role?.includes("admin") && (
+                  <Button
+                    onClick={() => router.push("/beheer")}
+                    className="w-full bg-purple-600 hover:bg-purple-700"
+                  >
+                    Beheer Kasgeld (Admin)
+                  </Button>
+                )}
+                {/* Payment Status Banner */}
+                {session?.user?.email && session?.user?.id && (
+                  <div className="mb-4">
+                    {settings.paymentUrl && (
+                    <Button
+                      onClick={() =>
+                        window.location.href = settings.paymentUrl 
+                      }
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                    >
+                      <BanknoteArrowDownIcon size={18} className=" text-white" /> Inleg betalen met WERO (Ideal)
+                    </Button>
                     )}
-                </div>
-                <div className="mt-2">
-                    {(status === "authenticated") && (
-                        <div className="flex flex-col space-y-4">
-                            {/* Admin Beheer Button */}
-                            {session?.user?.role?.includes("admin") && (
-                                <Button 
-                                    onClick={() => router.push("/beheer")}
-                                    className="w-full bg-purple-600 hover:bg-purple-700"
-                                >
-                                    Beheer Kasgeld (Admin)
-                                </Button>
-                            )}
-                            {/* Payment Status Banner */}
-                            {session?.user?.email && session?.user?.id && (
-                                <div className="mb-4">
-                                    <PaymentStatusBanner 
-                                        userEmail={session.user.email} 
-                                        userId={session.user.id} 
-                                    />
-                                </div>
-                            )}
-                            {/* {components.filter((component) =>
+                    <PaymentStatusBanner
+                      userEmail={session.user.email}
+                      userId={session.user.id}
+                    />
+                  </div>
+                )}
+                {/* {components.filter((component) =>
                                 component.href === view) */}
-                            {components.map((component) => (
-                                <div key={component.title}>
-                                    {component.roles.some(role => session.user.role.includes(role)) ? (
-                                        component.element ? (
-                                            <div key={`${component.title}-${runs.length}`}>
-                                                {component.element({ users, runs, onChangeUsers: setUsers, onChangeRuns: setRuns })}
-                                            </div>
-                                        ) : (
-                                            router.push(component.href)
-                                        )
-                                        // <{component.element} className="w-80"/>
-                                    ) : (
-                                        <div className="text-red-500">
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                {components.map((component) => (
+                  <div key={component.title}>
+                    {component.roles.some((role) =>
+                      session.user.role.includes(role),
+                    ) ? (
+                      component.element ? (
+                        <div key={`${component.title}-${runs.length}`}>
+                          {component.element({
+                            users,
+                            runs,
+                            onChangeUsers: setUsers,
+                            onChangeRuns: setRuns,
+                          })}
                         </div>
+                      ) : (
+                        router.push(component.href)
+                      )
+                    ) : (
+                      // <{component.element} className="w-80"/>
+                      <div className="text-red-500"></div>
                     )}
-                    {status !== "authenticated" && (
-                        <div className="flex flex-col items-center justify-center min-h-screen py-2">
-                            <SignInForm />
-                        </div>
-
-                    )}
-                </div>
-            </div>
-        </main >
+                  </div>
+                ))}
+              </div>
+            )}
+            {status !== "authenticated" && (
+              <div className="flex flex-col items-center justify-center min-h-screen py-2">
+                <SignInForm />
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
     );
 }

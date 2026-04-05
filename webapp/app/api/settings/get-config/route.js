@@ -23,6 +23,7 @@ export async function GET(req) {
       return new Response(
         JSON.stringify({ 
           adminEmail: process.env.ADMIN_EMAIL || "admin@kasgeld.nl",
+          paymentUrl: process.env.PAYMENT_URL || "",
           appName: "Kasgeld"
         }),
         { status: 200 }
@@ -63,6 +64,7 @@ export async function POST(req) {
     const config = {
       id: "app-config",
       adminEmail: body.adminEmail || process.env.ADMIN_EMAIL || "admin@kasgeld.nl",
+      paymentUrl: body.paymentUrl || "",
       appName: body.appName || "Kasgeld",
       updatedAt: new Date().toISOString(),
       updatedBy: session.user.email,
