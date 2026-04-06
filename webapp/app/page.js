@@ -14,6 +14,8 @@ import { SignInForm } from "@/components/signin_form";
 import EventsPage from "./events/page";
 import dayjs from "dayjs";
 import { Currency, BanknoteArrowDownIcon } from "lucide-react";
+import { ContactMessageButton } from "@/components/contact-message-button";
+import { KasgeldRulesButton } from "@/components/kasgeld-rules-button";
 
 
 export default function Home() {
@@ -164,6 +166,14 @@ export default function Home() {
             )}
           </div>
         </div>
+          <div className="px-2 py-2">
+            <p className="text-xs text-muted-foreground mb-2">Hulp & Informatie</p>
+            <div className="flex gap-1">
+              <KasgeldRulesButton />
+              <ContactMessageButton />
+            </div>
+          </div>
+        
       </main>
     );
 }
