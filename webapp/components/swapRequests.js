@@ -82,73 +82,49 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                 }),
             });
 
+            const result = await swapUpdateResponse.json();
             if (!swapUpdateResponse.ok) {
-                throw new Error("Failed to update swap request");
+                throw new Error(result.error || "Failed to update swap request");
             }
 
-            // If accepted, update the run units
-            if (actionType === "accept") {
-                await updateRunUnits(selectedRequest);
+            if (result.updatedRun && Array.isArray(runs)) {
+                onChangeRuns(runs.map(run =>
+                    run.id === result.updatedRun.id ? result.updatedRun : run
+                ));
             }
 
             toast.success(`Swap request ${actionType}ed successfully!`);
             setResponseDialogOpen(false);
-            fetchSwapRequests(); // Refresh the list
+            await fetchSwapRequests();
         } catch (error) {
             console.error("Error handling swap response:", error);
-            toast.error(`Failed to ${actionType} swap request`);
+            toast.error(error.message || `Failed to ${actionType} swap request`);
         }
     };
 
-    const updateRunUnits = async (swapRequest) => {
+    const handleSynchronizeAcceptedSwap = async (request) => {
         try {
-            // Find the target run from the global runs state
-            const targetRun = runs?.find(run => run.id === swapRequest.runId);
-            
-            if (!targetRun) {
-                throw new Error("Run not found");
-            }
-
-            // Update the units assignments
-            const updatedUnits = targetRun.units.map(unit => {
-                // Swap the requester's unit
-                if (unit.name === swapRequest.requesterUnitName && unit.hand === swapRequest.requesterUnitHand) {
-                    return { ...unit, assignedTo: swapRequest.targetedUserId };
-                }
-                // Swap the targeted unit
-                if (unit.name === swapRequest.targetedUnitName && unit.hand === swapRequest.targetedUnitHand) {
-                    return { ...unit, assignedTo: swapRequest.requesterUserId };
-                }
-                return unit;
-            });
-
-            const updatedRun = {
-                ...targetRun,
-                units: updatedUnits
-            };
-
-            // Update the run via API
-            const updateResponse = await fetch("/api/runs", {
+            const response = await fetch(`/api/swaps?id=${request.id}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(updatedRun),
+                body: JSON.stringify({ status: "accepted", synchronize: true }),
             });
-
-            if (!updateResponse.ok) {
-                throw new Error("Failed to update run units");
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || "Ruil kon niet met de kalender worden gesynchroniseerd");
             }
-
-            // Update the global state
-            if (runs && Array.isArray(runs)) {
-                onChangeRuns(runs.map(run => 
-                    run.id === targetRun.id ? updatedRun : run
+            if (result.updatedRun && Array.isArray(runs)) {
+                onChangeRuns(runs.map(run =>
+                    run.id === result.updatedRun.id ? result.updatedRun : run
                 ));
             }
+            toast.success("De ruil is verwerkt in de kalender");
+            await fetchSwapRequests();
         } catch (error) {
-            console.error("Error updating run units:", error);
-            throw error;
+            console.error("Error synchronizing accepted swap:", error);
+            toast.error(error.message || "Ruil kon niet met de kalender worden gesynchroniseerd");
         }
     };
 
@@ -226,6 +202,16 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
                                                 Afwijzen
                                             </Button>
                                         </div>
+                                    )}
+                                    {request.status === "accepted" && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="mt-3"
+                                            onClick={() => handleSynchronizeAcceptedSwap(request)}
+                                        >
+                                            Ruil naar kalender synchroniseren
+                                        </Button>
                                     )}
                                     {request.responseNote && (
                                         <div className="mt-2 p-2 bg-gray-50 rounded">
