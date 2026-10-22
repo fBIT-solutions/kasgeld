@@ -16,11 +16,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
+import { useCommunity } from "@/context/CommunityContext";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 const MonthGridCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
     const { data: session } = useSession();
+    const { activeCommunity } = useCommunity();
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [selectedEvent, setSelectedEvent] = useState(null);
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -80,7 +82,7 @@ const MonthGridCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
     };
 
     // Get user display name
-    const isAdmin = session?.user?.role?.includes('admin');
+    const isAdmin = activeCommunity?.isOwner;
     const getUserDisplayName = (userId) => {
         const user = users?.find(u => u.id === userId);
         if (!user) return 'Onbekend';

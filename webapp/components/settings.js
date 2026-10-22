@@ -15,22 +15,18 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Checkbox } from "./ui/checkbox";
 import { toast } from "sonner";
-import QRCodeComponent from "@/components/qr-generator";
 import { X } from "lucide-react";
-import dayjs from "dayjs";
 import KasgeldManage from "./kasgeldManage";
+import { useCommunity } from "@/context/CommunityContext";
 
 export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
     const { data: session } = useSession();
+    const { activeCommunity } = useCommunity();
     const router = useRouter();
     const [selectedUser, setSelectedUser] = useState(null);
     const [openUserDetails, setOpenUserDetails] = useState(false);
-    const [openRolePopover, setOpenRolePopover] = useState(false);
     const [editUser, setEditUser] = useState(null);
-    const roles = ["default", "guest", "member", "family", "worker", "admin"];
-    const [qrToken, setQrToken] = useState(null);
 
     if (!session) {
         return (
@@ -41,7 +37,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
         );
     }
 
-    const isAdmin = session?.user?.role?.includes('admin');
+    const isAdmin = activeCommunity?.isOwner;
 
     return (
         <div className="settings-component flex flex-col items-center w-full py-2">
@@ -56,8 +52,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                             const user = users.find(u => u.id === userId);
                             setSelectedUser(user);
                             setOpenUserDetails(true);
-                            // Ensure role is always an array
-                            setEditUser({ ...user, role: Array.isArray(user.role) ? user.role : [user.role].filter(r => r) });
+                            setEditUser(user);
                         }}
                     >
                         <SelectTrigger className="w-32 h-7 text-xs">
@@ -101,7 +96,7 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                         <X
                             size={18}
                             className="absolute top-4 right-4 cursor-pointer "
-                            onClick={() => {setOpenUserDetails(false); setSelectedUser(null); setEditUser(null); setQrToken(null);}}
+                            onClick={() => {setOpenUserDetails(false); setSelectedUser(null); setEditUser(null);}}
                         />
                     )}
                     {selectedUser && (
@@ -121,68 +116,9 @@ export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
                                     onChange={e => setEditUser({ ...editUser, lastname: e.target.value })}>
                                 </Input>
                             </Label>
-                            <Label className="text-sm">Rollen:
-                                <Popover open={openRolePopover} onOpenChange={setOpenRolePopover}>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className="grow justify-start">
-                                            {editUser.role.length
-                                                ? editUser.role.join(", ")
-                                                : "Select roles"}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="">
-                                        <div className="flex flex-col space-y-2">
-                                            {roles.map((role) => (
-                                                <div key={role} className="flex items-center space-x-2" >
-                                                    <Checkbox
-                                                        id={role}
-                                                        checked={editUser.role.includes(role)}
-                                                        onCheckedChange={(checked) => {
-                                                            const newValue = checked
-                                                                ? [...(editUser.role || []), role]
-                                                                : editUser.role?.filter((r) => r !== role);
-
-                                                            setEditUser({ ...editUser, role: newValue });
-                                                        }}
-                                                    />
-                                                    <label
-                                                        htmlFor={role}
-                                                        className="text-sm font-medium leading-none"
-                                                    >
-                                                        {role.charAt(0).toUpperCase() + role.slice(1)}
-                                                    </label>
-                                                </div>
-                                            ))}
-                                            <Button
-                                                variant="outline"
-                                                className="mt-2"
-                                                onClick={() => {
-                                                    setOpenRolePopover(false);
-                                                }}>
-                                                Sluiten
-                                            </Button>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </Label>
-                            <Label className="text-sm">Verloopt:
-                                <Input className="text-sm" type="date"
-                                    value={dayjs(editUser.expires).format("YYYY-MM-DD")}
-                                    onChange={e => setEditUser({ ...editUser, expires: e.target.value })}>
-                                </Input>
-                            </Label>
-                            <Button
-                                variant="outline"
-                                className="mt-2 text-sm"
-                                onClick={() => {
-                                    const userToken = Buffer.from(`${selectedUser.email}:${selectedUser.password}`).toString("base64");
-                                    const encodedToken = encodeURIComponent(userToken);
-                                    setQrToken(`https://fambalker.net/guest-access?token=${encodedToken}`);
-                                }}
-                            >
-                                Genereer Inlog QR Code
-                            </Button>
-                            {qrToken && <QRCodeComponent url={qrToken} />}
+                            <p className="text-sm">
+                                Communityrol: {selectedUser.communityRole === "owner" ? "Owner (admin)" : "Member"}
+                            </p>
                             <div className="flex flex-row justify-between items-center gap-2">
                                 <Button
                                     className="mt-2"

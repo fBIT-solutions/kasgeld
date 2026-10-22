@@ -24,18 +24,37 @@ import ProcessingResultDialog from "@/components/kasgeldComponents/ProcessingRes
 import ViewReportDialog from "@/components/kasgeldComponents/ViewReportDialog";
 import ClearAssignmentsDialog from "@/components/kasgeldComponents/ClearAssignmentsDialog";
 import { processAutoAssignment, clearAllAssignments, createAutoAssignReport } from "@/components/kasgeldComponents/autoAssignUtils";
-import { ChevronDown, X, Eye, Zap } from "lucide-react";
+import {
+  CalendarDays,
+  ChevronDown,
+  CreditCard,
+  Eye,
+  Home,
+  Mail,
+  MoreHorizontal,
+  Settings2,
+  UserRoundCog,
+  UserPlus,
+  UsersRound,
+  X,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import dayjs from "dayjs";
+import { useCommunity } from "@/context/CommunityContext";
+import { CommunitySettings } from "@/components/community-settings";
 
 export default function BeheerPage() {
   const { data: session, status } = useSession();
+  const { activeCommunity, isLoading: communityLoading } = useCommunity();
+  const isCommunityOwner = activeCommunity?.isOwner || false;
   const router = useRouter();
   const [runs, setRuns] = useState([]);
   const [users, setUsers] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState(null);
+  const [activeTab, setActiveTab] = useState("kalendar");
   
   // Modal states
   const [openModal, setOpenModal] = useState(null); // 'run', 'participant-add', 'participant-edit', 'email', 'settings'
@@ -64,16 +83,17 @@ export default function BeheerPage() {
   const [emailRecipientMode, setEmailRecipientMode] = useState('all'); // 'all' or 'selected'
   const [emailSelectedRecipients, setEmailSelectedRecipients] = useState([]);
   const [emailSending, setEmailSending] = useState(false);
+  const [assignmentEmailsSending, setAssignmentEmailsSending] = useState(false);
 
   // Check admin role
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/signin");
     }
-    if (status === "authenticated" && !session?.user?.role?.includes("admin")) {
+    if (status === "authenticated" && !communityLoading && !isCommunityOwner) {
       router.push("/");
     }
-  }, [status, session, router]);
+  }, [status, communityLoading, isCommunityOwner, router]);
 
   // Fetch runs, users, and payments
   useEffect(() => {
@@ -103,16 +123,16 @@ export default function BeheerPage() {
       }
     };
 
-    if (status === "authenticated" && session?.user?.role?.includes("admin")) {
+    if (status === "authenticated" && isCommunityOwner) {
       fetchData();
     }
-  }, [status, session]);
+  }, [status, isCommunityOwner]);
 
-  if (status === "loading" || loading) {
+  if (status === "loading" || communityLoading || loading) {
     return <div className="p-6">Laden...</div>;
   }
 
-  if (status !== "authenticated" || !session?.user?.role?.includes("admin")) {
+  if (status !== "authenticated" || !isCommunityOwner) {
     return null;
   }
 
@@ -130,7 +150,7 @@ export default function BeheerPage() {
   };
 
   // Handler for auto-assign processing
-  const handleProcessAutoAssignment = (params) => {
+  const handleProcessAutoAssignment = async (params, savedAssignmentId) => {
     const result = processAutoAssignment(editRun, params, users);
     const report = createAutoAssignReport(result);
     
@@ -139,13 +159,43 @@ export default function BeheerPage() {
       units: result.updatedUnits,
       autoAssignReports: [...(editRun.autoAssignReports || []), report]
     };
-    
-    setEditRun(updatedRun);
+
+    const response = await fetch("/api/runs", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updatedRun),
+    });
+    const responseData = await response.json();
+    if (!response.ok) {
+      throw new Error(responseData.error || "Automatische toewijzingen konden niet worden opgeslagen");
+    }
+
+    const savedRun = responseData;
+    setEditRun(savedRun);
+    setSelectedRun(savedRun);
+    setRuns((currentRuns) => currentRuns.map((run) => run.id === savedRun.id ? savedRun : run));
+
+    if (savedAssignmentId) {
+      try {
+        const draftResponse = await fetch(`/api/unit-assignments?id=${encodeURIComponent(savedAssignmentId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "active" }),
+        });
+        if (!draftResponse.ok) {
+          const draftData = await draftResponse.json();
+          throw new Error(draftData.error || "Conceptstatus kon niet worden bijgewerkt");
+        }
+      } catch (error) {
+        console.error("Assignments saved, but draft activation failed:", error);
+        toast.error("De units zijn toegewezen, maar het concept kon niet op actief worden gezet.");
+      }
+    }
+
     setProcessingResult(result);
     setProcessingResultOpen(true);
-    
-    // Trigger refresh of assignment drafts panel
     setAssignmentDraftsTrigger(prev => prev + 1);
+    return result;
   };
 
   // Handler for viewing reports
@@ -171,18 +221,8 @@ export default function BeheerPage() {
   // Calculate total monthly pot (sum of all participants' contributions per month)
   const calculateTotalMonthlyPot = () => {
     if (!selectedRun?.units) return 0;
-    
-    // Get unique users
-    const uniqueUsers = [...new Set(selectedRun.units.map(u => u.assignedTo).filter(u => u))];
-    
-    // Calculate total for each user (handcount × monthlyAmount)
-    const totalPerUser = uniqueUsers.reduce((sum, userId) => {
-      const userUnits = selectedRun.units.filter(u => u.assignedTo === userId);
-      const handCount = userUnits.reduce((acc, u) => acc + (u.hand || 1), 0);
-      return sum + (handCount * (selectedRun.monthlyAmount || 0));
-    }, 0);
-    
-    return totalPerUser;
+    const assignedUnitCount = selectedRun.units.filter((unit) => unit.assignedTo).length;
+    return assignedUnitCount * (selectedRun.monthlyAmount || 0);
   };
 
   // Recalculate units based on available hands and date range
@@ -291,60 +331,98 @@ export default function BeheerPage() {
     }
   };
 
+  const handleSendAssignmentEmails = async () => {
+    if (!selectedRun?.id) return;
+    setAssignmentEmailsSending(true);
+    try {
+      const response = await fetch("/api/runs/assignment-emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId: selectedRun.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Toewijzingsmails konden niet worden verstuurd");
+      if (result.failed) {
+        toast.error(`${result.sent} mail(s) verstuurd; ${result.failed} mislukt.`);
+      } else {
+        toast.success(`${result.sent} toewijzingsmail(s) verstuurd.`);
+      }
+    } catch (error) {
+      console.error("Error sending assignment emails:", error);
+      toast.error(error.message || "Toewijzingsmails konden niet worden verstuurd");
+    } finally {
+      setAssignmentEmailsSending(false);
+    }
+  };
+
+  const renderAdminMenu = (mobile = false) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant={mobile ? "ghost" : "outline"} className={mobile ? "h-14 min-w-0 flex-1 flex-col gap-1 px-1 text-xs" : "gap-2"}>
+          <MoreHorizontal className="h-4 w-4" />
+          {mobile ? (
+            <span>Meer</span>
+          ) : (
+            <>
+              Alle opties
+              <ChevronDown className="h-4 w-4" />
+            </>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-[70vh] w-64 overflow-y-auto">
+        <DropdownMenuItem onSelect={() => setActiveTab("kalendar")}>
+          <CalendarDays className="h-4 w-4" /> Kalender
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setActiveTab("betalingen")}>
+          <CreditCard className="h-4 w-4" /> Betalingen
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setActiveTab("toewijzingen")}>
+          <UsersRound className="h-4 w-4" /> Toewijzingen
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setActiveTab("community")}>
+          <Settings2 className="h-4 w-4" /> Community-instellingen
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => setOpenModal("run")}>
+          <CalendarDays className="h-4 w-4" /> Run aanmaken
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setOpenModal("participant-add")}>
+          <UserPlus className="h-4 w-4" /> Deelnemer toevoegen
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setOpenModal("participant-edit")}>
+          <UserRoundCog className="h-4 w-4" /> Deelnemers beheren
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setOpenModal("email")}>
+          <Mail className="h-4 w-4" /> Email versturen
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setOpenModal("settings")}>
+          <Settings2 className="h-4 w-4" /> App-instellingen
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => router.push("/")}>
+          <Home className="h-4 w-4" /> Terug naar home
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
-    <main className="w-full min-h-screen bg-gray-50">
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900">Beheer Dashboard</h1>
-            <p className="text-gray-600 mt-2">Beheer betalingen, units en gebruikerstoewijzingen</p>
+    <main className="min-h-screen w-full overflow-x-hidden bg-gray-50 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-8">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-3 py-4 sm:px-6 sm:py-6">
+        <div className="mb-5 flex min-w-0 flex-wrap items-center justify-between gap-3 sm:mb-8">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900 sm:text-4xl">Beheer Dashboard</h1>
+            <p className="mt-1 text-sm text-gray-600 sm:mt-2 sm:text-base">Beheer betalingen, units en gebruikerstoewijzingen</p>
           </div>
           
-          <div className="flex gap-2">
-            {/* Back to Home Button */}
-            <Button
-              variant="outline"
-              onClick={() => router.push('/')}
-              className="gap-2"
-            >
-              ← Terug naar Home
-            </Button>
-
-            {/* Admin Options Dropdown */}
-            <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                Admin Opties
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => setOpenModal('run')}>
-                ➕ Run aanmaken
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setOpenModal('participant-add')}>
-                👤 Deelnemer toevoegen
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setOpenModal('participant-edit')}>
-                ✏️ Deelnemers bewerken
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setOpenModal('email')}>
-                ✉️ Email bericht versturen
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setOpenModal('settings')}>
-                ⚙️ Instellingen
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          </div>
+          <div className="hidden shrink-0 gap-2 md:flex">{renderAdminMenu()}</div>
         </div>
 
         {/* Run Selector */}
         {runs.length > 0 && (
-          <div className="mb-8 flex gap-4 items-end">
-            <div className="flex-1">
+          <div className="mb-5 flex min-w-0 flex-col items-stretch gap-3 sm:mb-8 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
               <Label className="text-sm font-medium mb-2">Selecteer een Run</Label>
               <Select value={selectedRun?.id || ""} onValueChange={(runId) => {
                 const run = runs.find(r => r.id === runId);
@@ -397,12 +475,12 @@ export default function BeheerPage() {
         )}
 
         {/* Overview Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="mb-5 grid min-w-0 grid-cols-2 gap-3 sm:mb-8 sm:gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">Totaal Runs</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               <div className="text-3xl font-bold">{runs.length}</div>
             </CardContent>
           </Card>
@@ -411,7 +489,7 @@ export default function BeheerPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">Deelnemers</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               <div className="text-3xl font-bold">{users.length}</div>
             </CardContent>
           </Card>
@@ -420,8 +498,8 @@ export default function BeheerPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">Uitbetaling</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
+            <CardContent className="min-w-0">
+              <div className="break-words text-2xl font-bold sm:text-3xl">
                 €{calculateTotalMonthlyPot().toFixed(2)}
               </div>
               <p className="text-xs text-gray-500 mt-1">Maandelijkse pot</p>
@@ -432,7 +510,7 @@ export default function BeheerPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-gray-600">Units</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="min-w-0">
               <div className="text-3xl font-bold">
                 {selectedRun?.units?.length || 0}
               </div>
@@ -441,11 +519,12 @@ export default function BeheerPage() {
         </div>
 
         {/* Admin Tools */}
-        <Tabs defaultValue="kalendar" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full min-w-0">
+          <TabsList className="hidden h-auto w-full grid-cols-4 md:grid">
             <TabsTrigger value="kalendar">Kalender</TabsTrigger>
             <TabsTrigger value="betalingen">Betalingen</TabsTrigger>
             <TabsTrigger value="toewijzingen">Toewijzingen</TabsTrigger>
+            <TabsTrigger value="community">Community</TabsTrigger>
           </TabsList>
 
           {/* Calendar Tab */}
@@ -642,8 +721,8 @@ export default function BeheerPage() {
                             <p className="font-medium text-sm mb-3">{monthName}</p>
                             <div className="space-y-3 ml-4">
                               {monthUnits.map((unit) => (
-                                <div key={unit.name + unit.hand} className="flex text-xs items-center gap-3">
-                                  <span className="min-w-[80px] font-medium">
+                                <div key={unit.name + unit.hand} className="flex min-w-0 flex-col items-stretch gap-2 text-xs sm:flex-row sm:items-center sm:gap-3">
+                                  <span className="font-medium sm:min-w-[80px]">
                                     Hand {unit.hand}:
                                   </span>
                                   <Select
@@ -657,7 +736,7 @@ export default function BeheerPage() {
                                       setEditRun({ ...editRun, units: updatedUnits });
                                     }}
                                   >
-                                    <SelectTrigger className="flex-1">
+                                    <SelectTrigger className="w-full min-w-0 flex-1">
                                       <SelectValue placeholder="Select user" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -678,7 +757,7 @@ export default function BeheerPage() {
                             <div className="border-t border-gray-200 my-4" />
                           </div>
                         ))}
-                        <div className="flex gap-2 pt-4">
+                        <div className="flex flex-col gap-2 pt-4 sm:flex-row">
                           <Button
                             onClick={async () => {
                               try {
@@ -739,7 +818,18 @@ export default function BeheerPage() {
                           >
                             Opslaan
                           </Button>
+                          <Button
+                            variant="outline"
+                            onClick={handleSendAssignmentEmails}
+                            disabled={assignmentEmailsSending || !selectedRun?.units?.some((unit) => unit.assignedTo)}
+                          >
+                            <Mail className="mr-2 h-4 w-4" />
+                            {assignmentEmailsSending ? "Mails versturen..." : "Toewijzingen mailen"}
+                          </Button>
                         </div>
+                        <p className="text-xs text-muted-foreground">
+                          Mails worden verstuurd voor de laatst opgeslagen toewijzingen, één mail per deelnemer.
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
@@ -752,6 +842,10 @@ export default function BeheerPage() {
                 </CardContent>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="community">
+            <CommunitySettings />
           </TabsContent>
         </Tabs>
 
@@ -1190,7 +1284,7 @@ export default function BeheerPage() {
           onOpenChange={setAutoAssignDialogOpen}
           run={editRun}
           users={users}
-          isAdmin={session?.user?.role?.includes("admin")}
+          isAdmin={isCommunityOwner}
           onProcessAutoAssignment={handleProcessAutoAssignment}
         />
 
@@ -1320,6 +1414,30 @@ export default function BeheerPage() {
           </DialogContent>
         </Dialog>
       </div>
+      <nav
+        aria-label="Beheer navigatie"
+        className="fixed inset-x-0 bottom-0 z-40 flex items-center border-t bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur md:hidden"
+      >
+        {[
+          { value: "kalendar", label: "Kalender", Icon: CalendarDays },
+          { value: "betalingen", label: "Betalingen", Icon: CreditCard },
+          { value: "toewijzingen", label: "Toewijzingen", Icon: UsersRound },
+        ].map(({ value, label, Icon }) => (
+          <button
+            key={value}
+            type="button"
+            aria-current={activeTab === value ? "page" : undefined}
+            onClick={() => setActiveTab(value)}
+            className={`flex h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 text-xs ${
+              activeTab === value ? "font-semibold text-primary" : "text-muted-foreground"
+            }`}
+          >
+            <Icon className="h-5 w-5 shrink-0" />
+            <span className="max-w-full truncate">{label}</span>
+          </button>
+        ))}
+        {renderAdminMenu(true)}
+      </nav>
     </main>
   );
 }

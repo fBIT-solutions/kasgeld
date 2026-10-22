@@ -1,5 +1,5 @@
 import { getContainer } from "@/lib/cosmosdb";
-import { auth } from "@/auth";
+import { getCommunityContext } from "@/lib/communities";
 
 const settingsContainerId = "settings";
 
@@ -9,12 +9,18 @@ const settingsContainerId = "settings";
  */
 export async function GET(req) {
   try {
+    const { response, communityId } = await getCommunityContext(req);
+    if (response) return response;
     const container = await getContainer(settingsContainerId);
+    const configId = `community-${communityId}-config`;
 
     const { resources } = await container.items
       .query({
-        query: "SELECT * FROM c WHERE c.id = @id",
-        parameters: [{ name: "@id", value: "app-config" }],
+        query: "SELECT * FROM c WHERE c.id = @id AND c.communityId = @communityId",
+        parameters: [
+          { name: "@id", value: configId },
+          { name: "@communityId", value: communityId },
+        ],
       })
       .fetchAll();
 
@@ -22,8 +28,8 @@ export async function GET(req) {
       // Return default config if not found
       return new Response(
         JSON.stringify({ 
-          adminEmail: process.env.ADMIN_EMAIL || "admin@kasgeld.nl",
-          paymentUrl: process.env.PAYMENT_URL || "",
+          adminEmail: "",
+          paymentUrl: "",
           appName: "Kasgeld"
         }),
         { status: 200 }
@@ -35,8 +41,7 @@ export async function GET(req) {
     console.error("Error fetching config:", error);
     return new Response(
       JSON.stringify({ 
-        error: "Failed to fetch config",
-        adminEmail: process.env.ADMIN_EMAIL || "admin@kasgeld.nl"
+        error: "Failed to fetch config"
       }),
       { status: 500 }
     );
@@ -49,21 +54,16 @@ export async function GET(req) {
  */
 export async function POST(req) {
   try {
-    const session = await auth();
-
-    if (!session || !session.user?.role?.includes("admin")) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 403 }
-      );
-    }
+    const { response, communityId, session } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
 
     const container = await getContainer(settingsContainerId);
     const body = await req.json();
 
     const config = {
-      id: "app-config",
-      adminEmail: body.adminEmail || process.env.ADMIN_EMAIL || "admin@kasgeld.nl",
+      id: `community-${communityId}-config`,
+      communityId,
+      adminEmail: body.adminEmail || "",
       paymentUrl: body.paymentUrl || "",
       appName: body.appName || "Kasgeld",
       updatedAt: new Date().toISOString(),

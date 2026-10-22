@@ -3,7 +3,7 @@
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { LogOut, Edit2, Loader } from "lucide-react";
+import { LogOut, Edit2, Loader, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,9 +27,11 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { ContactMessageButton } from "@/components/contact-message-button";
 import { KasgeldRulesButton } from "@/components/kasgeld-rules-button";
+import { useCommunity } from "@/context/CommunityContext";
 
 export function UserMenu() {
   const { data: session, update: updateSession } = useSession();
+  const { communities, activeCommunity, switchCommunity } = useCommunity();
   const [isEditing, setIsEditing] = useState(false);
   const [displayname, setDisplayname] = useState(session?.user?.displayname || "");
   const [isSaving, setIsSaving] = useState(false);
@@ -209,6 +211,28 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {activeCommunity && (
+          <>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Community wijzigen
+            </DropdownMenuLabel>
+            {communities.map((community) => (
+              <DropdownMenuItem
+                key={community.id}
+                onSelect={() => {
+                  if (community.id !== activeCommunity.id) {
+                    switchCommunity(community.id).catch((error) => toast.error(error.message));
+                  }
+                }}
+                className="cursor-pointer"
+              >
+                <span className="flex-1">{community.name}</span>
+                {community.id === activeCommunity.id && <Check className="h-4 w-4" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
 
         {isEditing ? (
           <div className="px-2 py-3 space-y-2">

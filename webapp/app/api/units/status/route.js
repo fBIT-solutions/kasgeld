@@ -1,11 +1,13 @@
 import { getContainer } from "../../../../lib/cosmosdb";
 import { sendUnitPaidEmail } from "../../../../lib/email-service";
+import { getCommunityContext } from "@/lib/communities";
 import dayjs from "dayjs";
 
 const containerId = "runs";
 const usersContainerId = "users";
 
-async function getUserById(userId) {
+async function getUserById(userId, community) {
+  if (!community.memberUserIds.includes(userId)) return null;
   try {
     const container = await getContainer(usersContainerId);
     const { resource } = await container.item(userId, userId).read();
@@ -22,6 +24,8 @@ async function getUserById(userId) {
  */
 export async function POST(req) {
   try {
+    const { response, community, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const { runId, monthName, newStatus } = await req.json();
 
     if (!runId || !monthName || !newStatus) {
@@ -34,12 +38,12 @@ export async function POST(req) {
     const container = await getContainer(containerId);
     const { resource: run } = await container.item(runId, runId).read();
 
-    if (!run) {
+    if (!run || run.communityId !== communityId) {
       return new Response(JSON.stringify({ error: "Run not found" }), { status: 404 });
     }
 
-    // Find the unit being updated to get assignedTo info
-    const unitBeingUpdated = run.units.find((unit) => unit.name === monthName);
+    const unitsInMonth = run.units.filter((unit) => unit.name === monthName);
+    const wasAlreadyPaidOut = unitsInMonth.length > 0 && unitsInMonth.every((unit) => unit.status === "uitbetaald");
 
     // Update the unit status
     const updatedUnits = run.units.map((unit) => {
@@ -66,37 +70,32 @@ export async function POST(req) {
     const { resource: result } = await container.item(runId, runId).replace(updatedRun);
 
     // Send email notification when unit is marked as paid
-    if (newStatus === "uitbetaald" && unitBeingUpdated?.assignedTo) {
-      console.log(`Unit ${monthName} marked as paid, attempting to send email to ${unitBeingUpdated.assignedTo}...`);
-      try {
-        const user = await getUserById(unitBeingUpdated.assignedTo);
-        console.log(`User lookup result:`, user);
+    if (newStatus === "uitbetaald" && !wasAlreadyPaidOut) {
+      const payoutUnits = unitsInMonth.filter((unit) => unit.assignedTo);
+      const assignedUnitCount = run.units.filter((unit) => unit.assignedTo).length;
+      const monthlyPot = assignedUnitCount * (run.monthlyAmount || 0);
+      const payoutPerUnit = payoutUnits.length > 0 ? monthlyPot / payoutUnits.length : 0;
+      const [month, year] = monthName.split("-");
 
-        if (!user) {
-          console.error(`User ${unitBeingUpdated.assignedTo} not found`);
-        } else if (!user.email) {
-          console.error(`User ${unitBeingUpdated.assignedTo} has no email`);
-        } else {
-          const monthParts = monthName.split('-');
-          const handNumber = unitBeingUpdated.hand || "N/A";
-          // Calculate total pot: sum of all hands in run × monthly amount per hand
-          const totalHands = run.units.reduce((sum, u) => sum + (u.hand || 1), 0);
-          const totalPot = (totalHands * (run.monthlyAmount || 0));
+      for (const unit of payoutUnits) {
+        try {
+          const user = await getUserById(unit.assignedTo, community);
+          if (!user?.email) {
+            console.error(`Cannot send unit paid notification: user ${unit.assignedTo} has no email`);
+            continue;
+          }
 
-          console.log(`Sending unit paid email to ${user.email} for hand ${handNumber}, total pot: €${totalPot} (${totalHands} hands × €${run.monthlyAmount})`);
           await sendUnitPaidEmail({
             recipientEmail: user.email,
             recipientName: user.firstname || user.displayname || "Deelnemer",
-            handNumber: handNumber,
-            month: monthParts[0] || monthName,
-            year: monthParts[1] || run.year || "2026",
-            amount: totalPot
+            handNumber: unit.hand || "N/A",
+            month,
+            year: year || run.year || "2026",
+            amount: payoutPerUnit,
           });
-          console.log(`Email sent successfully for unit ${monthName}`);
+        } catch (emailError) {
+          console.error(`Failed to send unit paid notification for ${unit.name}, hand ${unit.hand}:`, emailError);
         }
-      } catch (emailError) {
-        console.error("Failed to send unit paid notification:", emailError);
-        // Don't fail the request if email fails
       }
     }
 

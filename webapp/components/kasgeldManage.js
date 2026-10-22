@@ -30,11 +30,13 @@ import {
     AccordionContent,
 } from "@/components/ui/accordion";
 import dayjs from "dayjs";
+import { useCommunity } from "@/context/CommunityContext";
 
 export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns }) {
     const { data: session, status } = useSession();
+    const { activeCommunity } = useCommunity();
     const router = useRouter();
-    const isAdmin = session?.user?.role?.includes('admin');
+    const isAdmin = activeCommunity?.isOwner;
     const [selectedRun, setSelectedRun] = useState(null);
     const [openRunDetails, setOpenRunDetails] = useState(false);
     const [editRun, setEditRun] = useState([]);

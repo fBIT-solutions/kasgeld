@@ -1,30 +1,24 @@
-import { addItem, getItems, getContainer } from "../../../lib/cosmosdb";
+import { getContainer } from "../../../lib/cosmosdb";
+import { getCommunityContext, withCommunityId } from "@/lib/communities";
 import { put } from "@vercel/blob";
-import { sendUnitAssignedEmail } from "../../../lib/email-service";
 
 const containerId = "runs";
-const usersContainerId = "users";
-
-async function getUserById(userId) {
-  try {
-    const container = await getContainer(usersContainerId);
-    const { resource } = await container.item(userId, userId).read();
-    return resource;
-  } catch (error) {
-    console.error(`Failed to get user ${userId}:`, error);
-    return null;
-  }
-}
 
 export async function POST(req) {
   try {
+    const { response, community, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const data = await req.json();
+    if ((data.units || []).some((unit) => unit.assignedTo && !community.memberUserIds.includes(unit.assignedTo))) {
+      return Response.json({ error: "All assigned users must belong to this community" }, { status: 400 });
+    }
     const container = await getContainer(containerId);
 
     // Check if event with same title/date exists (customize as needed)
     const querySpec = {
-      query: "SELECT * FROM c WHERE c.year = @year",
+      query: "SELECT * FROM c WHERE c.communityId = @communityId AND c.year = @year",
       parameters: [
+        { name: "@communityId", value: communityId },
         { name: "@year", value: data.year },
       ],
     };
@@ -33,12 +27,13 @@ export async function POST(req) {
     if (resources.length > 0) {
       // Update existing event
       const existing = resources[0];
-      const updatedEvent = { ...existing, ...data };
+      const updatedEvent = withCommunityId({ ...existing, ...data }, communityId);
       const { resource } = await container.item(existing.id, existing.id).replace(updatedEvent);
       return new Response(JSON.stringify(resource), { status: 200 });
     } else {
-      const item = await addItem(containerId, data);
-      return new Response(JSON.stringify({ message: "Run toegevoegd", item }), { status: 201 });
+      const item = withCommunityId({ ...data, id: data.id || crypto.randomUUID() }, communityId);
+      const { resource } = await container.items.create(item);
+      return new Response(JSON.stringify({ message: "Run toegevoegd", item: resource }), { status: 201 });
     }
   } catch (error) {
     console.error("Error adding/updating run:", error);
@@ -48,42 +43,22 @@ export async function POST(req) {
 
 export async function PUT(req) {
   try {
+    const { response, communityId, community } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const container = await getContainer(containerId);
     const data = await req.json();
 
     if (data.id) {
-      const { resource: existingEvent } = await container.item(data.id, data.id).read();
-
-      const updatedEvent = { ...existingEvent, ...data };
-      const { resource } = await container.item(data.id, data.id).replace(updatedEvent);
-
-      // Send notifications for newly assigned units
-      try {
-        if (existingEvent.units && data.units) {
-          // Compare old and new units to find new assignments
-          for (const newUnit of data.units) {
-            const oldUnit = existingEvent.units.find(u => u.name === newUnit.name && u.hand === newUnit.hand);
-            
-            // If unit was unassigned and is now assigned, send notification
-            if (newUnit.assignedTo && (!oldUnit || !oldUnit.assignedTo)) {
-              const user = await getUserById(newUnit.assignedTo);
-              
-              if (user?.email) {
-                await sendUnitAssignedEmail({
-                  recipientEmail: user.email,
-                  recipientName: user.firstname || user.displayname || "Deelnemer",
-                  handNumber: newUnit.hand,
-                  month: newUnit.name,
-                  year: data.year || new Date().getFullYear().toString()
-                });
-              }
-            }
-          }
-        }
-      } catch (emailError) {
-        console.error("Failed to send unit assignment notifications:", emailError);
-        // Don't fail the request if emails fail
+      if ((data.units || []).some((unit) => unit.assignedTo && !community.memberUserIds.includes(unit.assignedTo))) {
+        return Response.json({ error: "All assigned users must belong to this community" }, { status: 400 });
       }
+      const { resource: existingEvent } = await container.item(data.id, data.id).read();
+      if (!existingEvent || existingEvent.communityId !== communityId) {
+        return new Response(JSON.stringify({ error: "Run niet gevonden" }), { status: 404 });
+      }
+
+      const updatedEvent = withCommunityId({ ...existingEvent, ...data }, communityId);
+      const { resource } = await container.item(data.id, data.id).replace(updatedEvent);
 
       return new Response(JSON.stringify(resource), { status: 200 });
     } else {
@@ -97,11 +72,17 @@ export async function PUT(req) {
 
 export async function DELETE(req) {
   try {
+    const { response, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const { searchParams } = new URL(req.url);
     const container = await getContainer(containerId);
     const id = searchParams.get("id");
 
     if (id) {
+      const { resource } = await container.item(id, id).read();
+      if (!resource || resource.communityId !== communityId) {
+        return new Response(JSON.stringify({ error: "Run niet gevonden" }), { status: 404 });
+      }
       await container.item(id, id).delete();
       return new Response("Ok", { status: 200 });
     } else {
@@ -115,8 +96,14 @@ export async function DELETE(req) {
 
 export async function GET(req) {
   try {
-    const items = await getItems(containerId);
-    return new Response(JSON.stringify(items), { status: 200 });
+    const { response, communityId } = await getCommunityContext(req);
+    if (response) return response;
+    const container = await getContainer(containerId);
+    const { resources } = await container.items.query({
+      query: "SELECT * FROM c WHERE c.communityId = @communityId",
+      parameters: [{ name: "@communityId", value: communityId }],
+    }).fetchAll();
+    return new Response(JSON.stringify(resources), { status: 200 });
   } catch (error) {
     console.error("Error fetching runs:", error);
     return new Response(JSON.stringify({ error: "Fout bij het ophalen van runs" }), { status: 500 });

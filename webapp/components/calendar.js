@@ -24,6 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
+import { useCommunity } from "@/context/CommunityContext";
 
 const DnDCalendar = withDragAndDrop(Calendar)
 const locales = {
@@ -40,6 +41,7 @@ const localizer = dateFnsLocalizer({
 
 const MyCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
     const { data: session } = useSession();
+    const { activeCommunity } = useCommunity();
     const [calendarItems, setCalendarItems] = useState([])
     const [currentDate, setCurrentDate] = useState(new Date())
     const [selectedEvent, setSelectedEvent] = useState(null)
@@ -52,7 +54,7 @@ const MyCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
 
 // Helper function to get display name based on admin status
 const getDisplayName = (user) => {
-    const isAdmin = session?.user?.role?.includes('admin');
+    const isAdmin = activeCommunity?.isOwner;
     if (isAdmin) {
         return user?.displayname || `${user?.firstname} ${user?.lastname}`.trim() || 'Onbekend';
     }

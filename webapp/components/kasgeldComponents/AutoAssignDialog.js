@@ -265,21 +265,6 @@ export default function AutoAssignDialog({
 
         setIsSaving(true);
         try {
-            // If we have a saved draft, update it to active
-            if (savedAssignmentId) {
-                const response = await fetch(`/api/unit-assignments?id=${encodeURIComponent(savedAssignmentId)}`, {
-                    method: "PUT",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        status: "active"
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error("Fout bij het activeren van toewijzing");
-                }
-            }
-
             // Call the parent callback to process the assignments
             // Convert months back to "MM" format for processing
             const convertedPreferences = Object.fromEntries(
@@ -289,11 +274,11 @@ export default function AutoAssignDialog({
                 ])
             );
 
-            onProcessAutoAssignment({
+            await onProcessAutoAssignment({
                 selectedUsers,
                 userHandCounts,
                 userPreferences: convertedPreferences
-            });
+            }, savedAssignmentId);
 
             toast.success("Toewijzing verwerkt!");
             handleClose();
@@ -316,8 +301,8 @@ export default function AutoAssignDialog({
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
-                <DialogHeader className="flex-shrink-0">
+            <DialogContent className="flex h-[calc(100dvh-1rem)] max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] flex-col gap-3 overflow-hidden p-4 sm:h-[min(90dvh,800px)] sm:max-h-[90dvh] sm:max-w-3xl sm:gap-4 sm:p-6">
+                <DialogHeader className="shrink-0 pr-7">
                     <DialogTitle className="flex items-center gap-2">
                         <Users className="h-5 w-5" />
                         Automatisch toewijzen
@@ -325,7 +310,7 @@ export default function AutoAssignDialog({
                             <Badge variant="secondary" className="text-xs">Concept geladen</Badge>
                         )}
                     </DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="leading-relaxed">
                         Selecteer deelnemers om handen aan toe te wijzen.
                         <Tooltip>
                             <TooltipTrigger>
@@ -343,19 +328,19 @@ export default function AutoAssignDialog({
 
                 {/* Loading state */}
                 {isLoadingDraft && (
-                    <div className="flex items-center justify-center py-8">
+                    <div className="flex min-h-0 flex-1 items-center justify-center py-8">
                         <Loader className="h-6 w-6 animate-spin text-blue-600 mr-2" />
                         <span className="text-sm text-muted-foreground">Opgeslagen toewijzing laden...</span>
                     </div>
                 )}
 
                 {!isLoadingDraft && (
-                    <div className="flex flex-col flex-1 min-h-0 space-y-4">
+                    <div className="flex min-h-0 flex-1 flex-col gap-3 sm:gap-4">
                         {/* Summary - Fixed section */}
-                        <div className="flex-shrink-0 space-y-3">
+                        <div className="shrink-0 space-y-3">
                             {/* Assignment Status */}
                             {hasAssignments() && (
-                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                <div className="grid grid-cols-2 gap-2 text-sm sm:gap-4">
                                     <div className="text-center p-2 bg-blue-50 border border-blue-200 rounded">
                                         <div className="font-semibold text-blue-800">{getTotalAssignedHands()}</div>
                                         <div className="text-blue-600 text-xs">Toegewezen</div>
@@ -368,7 +353,7 @@ export default function AutoAssignDialog({
                             )}
 
                             {/* Request Summary */}
-                            <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div className="grid grid-cols-3 gap-2 text-center text-sm sm:gap-4">
                                 <div className="text-center p-2 bg-gray-50 rounded">
                                     <div className="font-semibold">{getTotalAvailableHands()}</div>
                                     <div className="text-xs text-muted-foreground">Beschikbaar</div>
@@ -388,7 +373,7 @@ export default function AutoAssignDialog({
 
                     {/* Error message - Fixed section */}
                     {!isAssignmentValid() && getTotalHandsRequested() > getTotalAvailableHands() && (
-                        <div className="flex-shrink-0 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded text-red-800">
+                        <div className="flex shrink-0 items-start gap-2 rounded border border-red-200 bg-red-50 p-3 text-red-800">
                             <AlertTriangle className="h-4 w-4" />
                             <span className="text-sm">Te veel handen geselecteerd, pas de toewijzing aan</span>
                         </div>
@@ -396,25 +381,24 @@ export default function AutoAssignDialog({
 
                     {/* Info message for existing assignments */}
                     {hasAssignments() && (
-                        <div className="flex-shrink-0 flex items-center gap-2 p-1 bg-blue-50 border border-blue-200 rounded text-blue-800">
+                        <div className="flex shrink-0 items-start gap-2 rounded border border-blue-200 bg-blue-50 p-2 text-blue-800">
                             <Users className="h-4 w-4" />
                             <span className="text-xs">Sommige eenheden zijn al toegewezen. Automatisch toewijzen werkt alleen met de resterende {getTotalAvailableHands()} beschikbare handen.</span>
                         </div>
                     )}
 
                     {/* Scrollable user list */}
-                    <div className="flex-1 min-h-0 overflow-hidden">
-                        <div className="h-full max-h-[350px] overflow-hidden">
-                            <ScrollArea className="h-full">
-                                <div className="space-y-4 pr-4 max-h-[350px]">
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                            <ScrollArea className="h-full min-h-0 w-full">
+                                <div className="space-y-3 pr-3 sm:space-y-4 sm:pr-4">
                                     {users?.map(user => (
-                                        <div key={user.id} className="border rounded p-3">
-                                            <div className="flex items-center gap-3 mb-3">
+                                        <div key={user.id} className="min-w-0 rounded-md border bg-card p-3 sm:p-4">
+                                            <div className="mb-3 flex min-w-0 items-center gap-3">
                                                 <Checkbox
                                                     checked={selectedUsers.includes(user.id)}
                                                     onCheckedChange={() => toggleUserSelection(user.id)}
                                                 />
-                                                <span className="font-medium">
+                                                <span className="min-w-0 break-words font-medium">
                                                     {isAdmin 
                                                         ? [user.firstname, user.lastname].filter(Boolean).join(' ') || user.displayname
                                                         : user.firstname}
@@ -422,31 +406,35 @@ export default function AutoAssignDialog({
                                             </div>
 
                                             {selectedUsers.includes(user.id) && (
-                                                <div className="ml-6 space-y-3">
-                                                    <div>
-                                                        <Label className="text-sm">Number of hands:</Label>
+                                                <div className="space-y-4 sm:ml-7">
+                                                    <div className="flex items-center justify-between gap-3 sm:justify-start">
+                                                        <Label className="text-sm">Aantal handen:</Label>
                                                         <Input
                                                             type="number"
                                                             min="0"
                                                             max={getTotalAvailableHands()}
                                                             value={userHandCounts[user.id] || 0}
                                                             onChange={(e) => updateUserHandCount(user.id, e.target.value)}
-                                                            className="w-20 text-sm"
+                                                            className="w-24 text-sm sm:w-28"
                                                         />
                                                     </div>
 
                                                     <div>
-                                                        <Label className="text-sm">Preferred months:</Label>
-                                                        <div className="flex flex-wrap gap-2 mt-1">
-                                                            {getAvailableMonths().map(month => (
-                                                                <Badge
+                                                        <Label className="text-sm font-medium">Voorkeursmaanden</Label>
+                                                        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+                                                            {getAvailableMonths().map((month, monthIndex) => (
+                                                                <label
                                                                     key={month}
-                                                                    variant={userPreferences[user.id]?.includes(month) ? "default" : "outline"}
-                                                                    className="cursor-pointer text-xs"
-                                                                    onClick={() => toggleMonthPreference(user.id, month)}
+                                                                    className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm hover:bg-muted/60"
                                                                 >
-                                                                    {month}
-                                                                </Badge>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={userPreferences[user.id]?.includes(month) || false}
+                                                                        onChange={() => toggleMonthPreference(user.id, month)}
+                                                                        className="h-4 w-4 shrink-0 accent-primary"
+                                                                    />
+                                                                    <span className="truncate">{month}</span>
+                                                                </label>
                                                             ))}
                                                         </div>
                                                     </div>
@@ -456,12 +444,11 @@ export default function AutoAssignDialog({
                                     ))}
                                 </div>
                             </ScrollArea>
-                        </div>
                     </div>
 
                     {/* Fixed buttons at bottom */}
-                    <div className="flex-shrink-0 flex justify-between gap-2 pt-4 border-t">
-                        <div className="flex gap-2">
+                    <div className="flex shrink-0 flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between sm:pt-4">
+                        <div className="flex flex-wrap gap-2">
                             <Button
                                 variant="outline"
                                 onClick={handleClose}
@@ -480,12 +467,12 @@ export default function AutoAssignDialog({
                                 </Button>
                             )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="grid grid-cols-1 gap-2 sm:flex">
                             <Button
                                 variant="secondary"
                                 onClick={handleSaveDraft}
                                 disabled={!isAssignmentValid() || isSaving}
-                                className="gap-2"
+                                className="w-full gap-2 sm:w-auto"
                             >
                                 <Save className="h-4 w-4" />
                                 Opslaan als concept
@@ -493,7 +480,7 @@ export default function AutoAssignDialog({
                             <Button
                                 onClick={handleProcess}
                                 disabled={!isAssignmentValid() || isSaving}
-                                className="gap-2"
+                                className="w-full gap-2 sm:w-auto"
                             >
                                 <CheckCircle className="h-4 w-4" />
                                 Verwerken
