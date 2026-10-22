@@ -1,10 +1,13 @@
 import { getContainer } from "../../../../lib/cosmosdb";
+import { getCommunityContext } from "@/lib/communities";
 
 const paymentsContainerId = "payments";
 const runsContainerId = "runs";
 
 export async function POST(req) {
   try {
+    const { response, session, communityId } = await getCommunityContext(req);
+    if (response) return response;
     const { userId, email, month, amount, handCount } = await req.json();
 
     if (!userId || !email || !month) {
@@ -13,14 +16,18 @@ export async function POST(req) {
         { status: 400 }
       );
     }
+    if (userId !== session.user.id) {
+      return Response.json({ error: "You can only create payment records for your own account" }, { status: 403 });
+    }
 
     const paymentsContainer = await getContainer(paymentsContainerId);
 
     // Check if payment record already exists for this user
     const existingPayments = {
       query:
-        "SELECT * FROM c WHERE c.userId = @userId AND c.month = @month",
+        "SELECT * FROM c WHERE c.communityId = @communityId AND c.userId = @userId AND c.month = @month",
       parameters: [
+        { name: "@communityId", value: communityId },
         { name: "@userId", value: userId },
         { name: "@month", value: month },
       ],
@@ -53,6 +60,7 @@ export async function POST(req) {
       paid: false,
       paidDate: null,
       createdAt: new Date().toISOString(),
+      communityId,
     };
 
     const { resource: createdPayment } = await paymentsContainer.items.create(

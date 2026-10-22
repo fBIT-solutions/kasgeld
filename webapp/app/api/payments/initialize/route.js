@@ -1,9 +1,12 @@
 import { getContainer } from "../../../../lib/cosmosdb";
+import { getCommunityContext } from "@/lib/communities";
 
 const paymentsContainerId = "payments";
 
 export async function POST(req) {
   try {
+    const { response, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const { runId, units } = await req.json();
 
     if (!runId || !units || units.length === 0) {
@@ -14,11 +17,23 @@ export async function POST(req) {
     }
 
     const container = await getContainer(paymentsContainerId);
+    const runsContainer = await getContainer("runs");
+    const { resource: run } = await runsContainer.item(runId, runId).read();
+    if (!run || run.communityId !== communityId) {
+      return Response.json({ error: "Run not found in this community" }, { status: 404 });
+    }
+    if (units.some((unit) => unit.assignedTo && !run.units?.some((runUnit) =>
+      runUnit.name === unit.name && runUnit.assignedTo === unit.assignedTo))) {
+      return Response.json({ error: "Units must be assigned within this community run" }, { status: 400 });
+    }
 
     // Get existing payments for this run
     const querySpec = {
-      query: "SELECT * FROM c WHERE c.runId = @runId",
-      parameters: [{ name: "@runId", value: runId }],
+      query: "SELECT * FROM c WHERE c.communityId = @communityId AND c.runId = @runId",
+      parameters: [
+        { name: "@communityId", value: communityId },
+        { name: "@runId", value: runId },
+      ],
     };
     const { resources: existingPayments } = await container.items.query(querySpec).fetchAll();
 
@@ -56,6 +71,7 @@ export async function POST(req) {
           paid: false,
           paidDate: null,
           createdAt: new Date().toISOString(),
+          communityId,
         };
         newPayments.push(newPayment);
       }

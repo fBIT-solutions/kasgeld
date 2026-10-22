@@ -1,26 +1,13 @@
 import { getContainer } from "../../../lib/cosmosdb";
-import { sendUnitPaidEmail } from "../../../lib/email-service";
+import { getCommunityContext, withCommunityId } from "@/lib/communities";
 
 const paymentsContainerId = "payments";
 const runsContainerId = "runs";
-const usersContainerId = "users";
-
-async function getUserById(userId) {
-  try {
-    const container = await getContainer(usersContainerId);
-    const { resource } = await container.item(userId, userId).read();
-    return resource;
-  } catch (error) {
-    console.error(`Failed to get user ${userId}:`, error);
-    return null;
-  }
-}
-
-async function getRunById(runId) {
+async function getRunById(runId, communityId) {
   try {
     const container = await getContainer(runsContainerId);
     const { resource } = await container.item(runId, runId).read();
-    return resource;
+    return resource?.communityId === communityId ? resource : null;
   } catch (error) {
     console.error(`Failed to get run ${runId}:`, error);
     return null;
@@ -29,19 +16,32 @@ async function getRunById(runId) {
 
 export async function POST(req) {
   try {
+    const { response, community, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const data = await req.json();
     
     const container = await getContainer(paymentsContainerId);
 
     // Create or update payment record
     const { id, runId, userId, email, month, amount, handCount, paid, paidDate } = data;
+    if (!id && runId) {
+      const run = await getRunById(runId, communityId);
+      if (!run) return Response.json({ error: "Run not found in this community" }, { status: 404 });
+    }
+    if (userId && !community.memberUserIds.includes(userId)) {
+      return Response.json({ error: "User is not a member of this community" }, { status: 400 });
+    }
 
     if (id) {
       // Update existing payment
       try {
         const { resource: existingPayment } = await container.item(id, id).read();
+        if (!existingPayment || existingPayment.communityId !== communityId) {
+          return Response.json({ error: "Betaling niet gevonden" }, { status: 404 });
+        }
         const updatedPayment = {
           ...existingPayment,
+          runId: existingPayment.runId,
           amount,
           handCount,
           paid,
@@ -50,58 +50,15 @@ export async function POST(req) {
         };
         const { resource } = await container.item(id, id).replace(updatedPayment);
 
-        // Send notification if payment was just marked as paid
-        if (paid && !existingPayment.paid) {
-          console.log(`Payment ${id} marked as paid, attempting to send email...`);
-          console.log(`User ID: ${userId}, Email: ${email}, ExistingPayment.paid: ${existingPayment.paid}`);
-          
-          try {
-            if (!userId) {
-              console.error("No userId provided in payment update request");
-            } else {
-              const user = await getUserById(userId);
-              console.log(`User lookup result:`, user);
-              
-              if (!user) {
-                console.error(`User ${userId} not found in database`);
-              } else if (!user.email) {
-                console.error(`User ${userId} has no email address`);
-              } else {
-                const run = await getRunById(runId);
-                console.log(`Run lookup result:`, run);
-                
-                // Extract hand number from month string (e.g., "Hand 2" from "04-2026")
-                const monthParts = month?.split('-') || [];
-                const monthName = monthParts[0] ? `${monthParts[0]}-${monthParts[1]}` : month;
-                
-                // Calculate total pot: sum of all hands in run × monthly amount per hand
-                const totalHands = run?.units?.reduce((sum, u) => sum + (u.hand || 1), 0) || 0;
-                const totalPot = (totalHands * (run?.monthlyAmount || 0));
-                
-                console.log(`Sending unit paid email to ${user.email}, total pot: €${totalPot} (${totalHands} hands × €${run?.monthlyAmount})`);
-                await sendUnitPaidEmail({
-                  recipientEmail: user.email,
-                  recipientName: user.firstname || user.displayname || "Deelnemer",
-                  handNumber: handCount || "N/A",
-                  month: monthParts[0] || monthName,
-                  year: monthParts[1] || run.year || "2026",
-                  amount: totalPot
-                });
-                console.log(`Email sent successfully for payment ${id}`);
-              }
-            }
-          } catch (emailError) {
-            console.error("Failed to send unit paid notification:", emailError);
-            // Don't fail the request if email fails
-          }
-        }
-
         return new Response(JSON.stringify(resource), { status: 200 });
       } catch (readError) {
         console.error("Error reading payment:", readError);
         return new Response(JSON.stringify({ error: "Betaling niet gevonden" }), { status: 404 });
       }
     } else {
+      if (!runId || !userId || !month) {
+        return Response.json({ error: "runId, userId, and month are required" }, { status: 400 });
+      }
       // Create new payment - linked to user for specific month
       const newPayment = {
         id: crypto.randomUUID(),
@@ -114,6 +71,7 @@ export async function POST(req) {
         paid: paid || false,
         paidDate: paid ? new Date().toISOString() : null,
         createdAt: new Date().toISOString(),
+        communityId,
       };
       const { resource } = await container.items.create(newPayment);
       return new Response(JSON.stringify(resource), { status: 201 });
@@ -126,6 +84,8 @@ export async function POST(req) {
 
 export async function GET(req) {
   try {
+    const { response, communityId } = await getCommunityContext(req);
+    if (response) return response;
     const { searchParams } = new URL(req.url);
     const runId = searchParams.get("runId");
     const email = searchParams.get("email");
@@ -136,8 +96,11 @@ export async function GET(req) {
 
     if (runId) {
       const querySpec = {
-        query: "SELECT * FROM c WHERE c.runId = @runId",
-        parameters: [{ name: "@runId", value: runId }],
+        query: "SELECT * FROM c WHERE c.communityId = @communityId AND c.runId = @runId",
+        parameters: [
+          { name: "@communityId", value: communityId },
+          { name: "@runId", value: runId },
+        ],
       };
       const { resources } = await container.items.query(querySpec).fetchAll();
       
@@ -156,7 +119,8 @@ export async function GET(req) {
     if (email || userId || month) {
       // Get all payments and filter on client side
       const querySpec = {
-        query: "SELECT * FROM c",
+        query: "SELECT * FROM c WHERE c.communityId = @communityId",
+        parameters: [{ name: "@communityId", value: communityId }],
       };
       let { resources } = await container.items.query(querySpec).fetchAll();
       
@@ -180,7 +144,8 @@ export async function GET(req) {
 
     // No filters - return all payments
     const querySpec = {
-      query: "SELECT * FROM c",
+      query: "SELECT * FROM c WHERE c.communityId = @communityId",
+      parameters: [{ name: "@communityId", value: communityId }],
     };
     const { resources } = await container.items.query(querySpec).fetchAll();
     return new Response(JSON.stringify(resources), { status: 200 });
@@ -191,6 +156,8 @@ export async function GET(req) {
 
 export async function DELETE(req) {
   try {
+    const { response, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const { searchParams } = new URL(req.url);
     const paymentId = searchParams.get("id");
     
@@ -198,6 +165,10 @@ export async function DELETE(req) {
 
     if (paymentId) {
       try {
+        const { resource } = await container.item(paymentId, paymentId).read();
+        if (!resource || resource.communityId !== communityId) {
+          return Response.json({ error: "Betaling niet gevonden" }, { status: 404 });
+        }
         await container.item(paymentId, paymentId).delete();
         return new Response("Ok", { status: 200 });
       } catch (deleteError) {
