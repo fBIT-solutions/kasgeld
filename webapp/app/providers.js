@@ -1,14 +1,17 @@
 import { SessionProvider } from "next-auth/react";
 import { ViewProvider } from "@/context/ViewContext";
-import { ReactNode } from "react";
 import { Toaster } from "sonner";
+import { CommunityProvider } from "@/context/CommunityContext";
+import { CommunityShell } from "@/components/community-shell";
 
 export function ClientProviders({ children }) {
   return (
     <SessionProvider>
       <ViewProvider>
-        {children}
-        <Toaster richColors />
+        <CommunityProvider>
+          <CommunityShell>{children}</CommunityShell>
+          <Toaster richColors />
+        </CommunityProvider>
       </ViewProvider>
     </SessionProvider>
   );

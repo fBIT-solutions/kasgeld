@@ -49,7 +49,11 @@ export const authConfig = {
                     firstname: user.firstname ?? "",
                     lastname: user.lastname ?? "",
                     displayname: user.displayname || `${user.firstname} ${user.lastname}`.trim(),
-                    role: Array.isArray(user.role) ? user.role : [user.role || "member"],
+                    role: [
+                        "member",
+                        ...(Array.isArray(user.role) ? user.role : [user.role || "member"])
+                            .filter((role) => role !== "admin" && role !== "default"),
+                    ],
                 };
             },
         }),

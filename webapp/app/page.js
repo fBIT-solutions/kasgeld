@@ -16,12 +16,14 @@ import dayjs from "dayjs";
 import { Currency, BanknoteArrowDownIcon } from "lucide-react";
 import { ContactMessageButton } from "@/components/contact-message-button";
 import { KasgeldRulesButton } from "@/components/kasgeld-rules-button";
+import { useCommunity } from "@/context/CommunityContext";
 
 
 export default function Home() {
     const { view } = useView();
     const { setView } = useView();
     const { data: session, status } = useSession();
+    const { activeCommunity } = useCommunity();
     const router = useRouter();
     const date = dayjs().startOf('week').format('YYYY-MM-DD');
     const [runs, setRuns] = useState([]);
@@ -92,7 +94,7 @@ export default function Home() {
         <div className="p-6">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">
-              Welkom @ Mavis Balker Kasgeld
+              Welkom @ {activeCommunity?.name || "Kasgeld"}
             </h1>
             {status === "authenticated" && (
               <div className="flex items-center gap-4">
@@ -105,7 +107,7 @@ export default function Home() {
             {status === "authenticated" && (
               <div className="flex flex-col space-y-4">
                 {/* Admin Beheer Button */}
-                {session?.user?.role?.includes("admin") && (
+                {activeCommunity?.isOwner && (
                   <Button
                     onClick={() => router.push("/beheer")}
                     className="w-full bg-purple-600 hover:bg-purple-700"

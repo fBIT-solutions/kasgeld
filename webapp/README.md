@@ -54,6 +54,13 @@ npm run start
 
 ## Core Concepts
 
+### Communities and Access
+
+- A registered user can belong to multiple communities and switch the active community from the community selector.
+- Any authenticated user can create a community. Its creator is the first owner; owners administer the community and can add registered users by email, promote members to owners, or remove members.
+- Community-owned records are stored with a `communityId`. API routes verify membership in the selected community before reading or changing those records.
+- Existing single-community Cosmos DB records are left unchanged. Records without a `communityId` are not shown in new communities; they are not automatically migrated.
+
 ### Payments vs Payouts
 
 **Payments**: Monthly contribution per participant

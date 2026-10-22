@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import { useCommunity } from "@/context/CommunityContext";
 import { useRouter } from "next/navigation";
 import { Bell, Check, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ import { toast } from "sonner";
 
 export default function NotificationBadge() {
   const { data: session, status } = useSession();
+  const { activeCommunity } = useCommunity();
   const router = useRouter();
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
   const [incomingSwapRequests, setIncomingSwapRequests] = useState([]);
@@ -51,7 +53,7 @@ export default function NotificationBadge() {
       }, 30000);
       return () => clearInterval(interval);
     }
-  }, [status, session?.user?.id]);
+  }, [status, session?.user?.id, activeCommunity?.id]);
 
   const fetchOpenTasks = async () => {
     try {
@@ -72,7 +74,7 @@ export default function NotificationBadge() {
       }
 
       // Fetch pending registration requests for admins only
-      if (session?.user?.role?.includes("admin")) {
+      if (activeCommunity?.isOwner) {
         const regRes = await fetch("/api/registration-requests");
         if (regRes.ok) {
           const regs = await regRes.json();
@@ -356,7 +358,7 @@ export default function NotificationBadge() {
               )}
 
               {/* Registration Requests Section (Admin Only) */}
-              {session?.user?.role?.includes("admin") && registrationRequests.length > 0 && (
+              {activeCommunity?.isOwner && registrationRequests.length > 0 && (
                 <div>
                   <h3 className="font-semibold text-sm mb-2 text-gray-700">
                     Registratieverzoeken ({registrationRequests.length})

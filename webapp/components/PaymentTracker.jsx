@@ -21,9 +21,11 @@ import {
 import { AlertTriangle } from "lucide-react";
 import dayjs from "dayjs";
 import { sendPaymentReminders } from "@/lib/email-service";
+import { useCommunity } from "@/context/CommunityContext";
 
 export default function PaymentTracker({ run, users, onChangeRuns }) {
   const { data: session } = useSession();
+  const { activeCommunity } = useCommunity();
   const [monthlyAmount, setMonthlyAmount] = useState(run?.monthlyAmount || 0);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -31,7 +33,7 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [sendingReminders, setSendingReminders] = useState(false);
 
-  const isAdmin = session?.user?.role?.includes('admin');
+  const isAdmin = activeCommunity?.isOwner;
 
   // Sort months chronologically (MM-YYYY format)
   const sortMonths = (a, b) => {
@@ -128,31 +130,6 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
         const responseData = await res.json();
         console.log("Payment response:", responseData);
         console.log("Payment state after update:", updatedPayment.paid ? "PAID ✓" : "UNPAID ✗");
-        
-        // If payment was just marked as paid, update unit status to "uitbetaald"
-        if (updatedPayment.paid && run?.id && payment.month) {
-          try {
-            const unitStatusRes = await fetch("/api/units/status", {
-              method: "POST",
-              body: JSON.stringify({
-                runId: run.id,
-                monthName: payment.month,
-                newStatus: "uitbetaald"
-              }),
-              headers: { "Content-Type": "application/json" },
-            });
-            
-            if (unitStatusRes.ok) {
-              console.log("Unit status updated to 'uitbetaald' and next unit set to 'open'");
-              // Optionally refetch run data to reflect unit status changes
-            } else {
-              console.error("Failed to update unit status:", unitStatusRes.status);
-            }
-          } catch (unitError) {
-            console.error("Error updating unit status:", unitError);
-            // Don't fail the payment update if unit status update fails
-          }
-        }
         
         await fetchPayments();
         toast.success(updatedPayment.paid ? "Betaling gemarkeerd als betaald" : "Betaling ongedaan gemaakt");
@@ -349,7 +326,7 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
         {isAdmin && (
           <div className="space-y-3 p-4 bg-gray-50 rounded">
             <div>
-              <Label htmlFor="amount" className="text-sm font-medium">Inlegbedrag per maand</Label>
+              <Label htmlFor="amount" className="text-sm font-medium">Inlegbedrag per unit per maand</Label>
               <div className="flex gap-2 mt-2">
                 <Input
                   id="amount"
@@ -376,7 +353,7 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
             )}
             {monthlyAmount && !saveAmount && (
               <div className="text-xs text-gray-500">
-                Huidig bedrag: € {parseFloat(monthlyAmount).toFixed(2)} per deelnemer per maand
+                Huidig bedrag: € {parseFloat(monthlyAmount).toFixed(2)} per unit per maand
               </div>
             )}
           </div>
