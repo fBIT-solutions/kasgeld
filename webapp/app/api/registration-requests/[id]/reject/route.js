@@ -1,10 +1,13 @@
 import { getContainer } from "../../../../../lib/cosmosdb";
 import { sendRejectionEmail } from "../../../../../lib/email-service";
+import { getCommunityContext } from "@/lib/communities";
 
 const registrationContainerId = "registration-requests";
 
 export async function POST(req, { params }) {
   try {
+    const { response, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const { id } = await params;
     console.log(`[REJECT] Processing reject request for id: ${id}`);
     
@@ -17,7 +20,7 @@ export async function POST(req, { params }) {
     const { resource: registrationRequest } = await container.item(id, id).read();
     console.log(`[REJECT] Found registration request: ${registrationRequest?.email}`);
     
-    if (!registrationRequest) {
+    if (!registrationRequest || registrationRequest.communityId !== communityId) {
       return new Response(JSON.stringify({ error: "Registratieverzoek niet gevonden" }), { status: 404 });
     }
 
@@ -55,4 +58,3 @@ export async function POST(req, { params }) {
     return new Response(JSON.stringify({ error: "Fout bij afwijzing van registratieverzoek", details: error.message }), { status: 500 });
   }
 }
-

@@ -47,27 +47,19 @@ export function SignInForm() {
 
       // If error, check if it's OTP requirement
       if (res?.error) {
-        // Try to fetch user to see if they have OTP
+        // Check whether this is a newly created account requiring its one-time code.
         try {
-          const userResponse = await fetch("/api/users", {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
+          const statusResponse = await fetch("/api/auth/otp-status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email }),
           });
-
-          if (userResponse.ok) {
-            const users = await userResponse.json();
-            const user = users.find(u => u.email === email);
-
-            // Check if user exists and has OTP (needs verification)
-            if (user?.otp && user?.mustChangePassword) {
-              setUserData(user);
-              setStep("otp-verify");
-              toast.info("OTP vereist - voer je eenmalige code in");
-              setIsLoading(false);
-              return;
-            }
+          const accountStatus = await statusResponse.json();
+          if (statusResponse.ok && accountStatus.requiresOtp) {
+            setStep("otp-verify");
+            toast.info("OTP vereist - voer je eenmalige code in");
+            setIsLoading(false);
+            return;
           }
         } catch (err) {
           console.error("Error checking for OTP:", err);
@@ -80,28 +72,6 @@ export function SignInForm() {
       }
 
       if (res?.ok) {
-        // Regular user - check if they might have OTP (shouldn't happen with new flow)
-        const userResponse = await fetch("/api/users", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (userResponse.ok) {
-          const users = await userResponse.json();
-          const user = users.find(u => u.email === email);
-
-          if (user?.otp && user?.mustChangePassword) {
-            // Shouldn't reach here but handle it
-            setUserData(user);
-            setStep("otp");
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        // No OTP - regular login successful
         toast.success("Je bent ingelogd!");
         setIsLoading(false);
         router.push("/");

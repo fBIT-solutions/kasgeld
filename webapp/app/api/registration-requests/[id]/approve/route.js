@@ -1,12 +1,16 @@
 import { getContainer } from "../../../../../lib/cosmosdb";
 import { sendWelcomeEmail } from "../../../../../lib/email-service";
 import bcrypt from "bcryptjs";
+import { getCommunityContext } from "@/lib/communities";
 
 const registrationContainerId = "registration-requests";
 const usersContainerId = "users";
 
 export async function POST(req, { params }) {
   try {
+    const { response, communityId, community, container: communitiesContainer } =
+      await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const { id } = await params;
     const container = await getContainer(registrationContainerId);
     const usersContainer = await getContainer(usersContainerId);
@@ -14,7 +18,7 @@ export async function POST(req, { params }) {
     // Get registration request
     const { resource: registrationRequest } = await container.item(id, id).read();
     
-    if (!registrationRequest) {
+    if (!registrationRequest || registrationRequest.communityId !== communityId) {
       return new Response(JSON.stringify({ error: "Registratieverzoek niet gevonden" }), { status: 404 });
     }
 
@@ -56,6 +60,8 @@ export async function POST(req, { params }) {
     };
 
     await usersContainer.items.create(newUser);
+    community.memberUserIds.push(newUser.id);
+    await communitiesContainer.item(community.id, community.id).replace(community);
 
     // Update registration request status
     const updatedRequest = {
@@ -83,10 +89,8 @@ export async function POST(req, { params }) {
     return new Response(JSON.stringify({ 
       success: true, 
       message: "Registratieverzoek goedgekeurd. Gebruiker aangemaakt en welkommail verzonden.",
-      otp 
     }), { status: 200 });
   } catch (error) {
     return new Response(JSON.stringify({ error: "Fout bij goedkeuring van registratieverzoek", details: error.message }), { status: 500 });
   }
 }
-

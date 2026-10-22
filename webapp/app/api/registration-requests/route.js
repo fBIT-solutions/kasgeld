@@ -1,12 +1,23 @@
 import { getContainer } from "../../../lib/cosmosdb";
 import { sendRejectionEmail, sendRegistrationRequestEmail } from "../../../lib/email-service";
+import { getActiveCommunityId, getCommunityContainer, getCommunityContext } from "@/lib/communities";
 
 const registrationContainerId = "registration-requests";
 
 export async function POST(req) {
   try {
+    const communityId = getActiveCommunityId(req);
+    if (!communityId) {
+      return Response.json({ error: "Select a community before submitting a registration request" }, { status: 409 });
+    }
+    const communities = await getCommunityContainer();
+    const { resource: community } = await communities.item(communityId, communityId).read();
+    if (!community) {
+      return Response.json({ error: "Community not found" }, { status: 404 });
+    }
     const data = await req.json();
-    const { firstName, lastName, displayName, email, handsCount, referrer } = data;
+    const { firstName, lastName, displayName, handsCount, referrer } = data;
+    const email = typeof data.email === "string" ? data.email.trim().toLowerCase() : "";
 
     // Validation
     if (!firstName || !lastName || !displayName || !email) {
@@ -17,8 +28,9 @@ export async function POST(req) {
 
     // Check if email already has pending/approved request
     const querySpec = {
-      query: "SELECT * FROM c WHERE c.email = @email AND (c.status = @pending OR c.status = @approved)",
+      query: "SELECT * FROM c WHERE c.communityId = @communityId AND c.email = @email AND (c.status = @pending OR c.status = @approved)",
       parameters: [
+        { name: "@communityId", value: communityId },
         { name: "@email", value: email },
         { name: "@pending", value: "pending" },
         { name: "@approved", value: "approved" }
@@ -44,22 +56,26 @@ export async function POST(req) {
       createdAt: new Date().toISOString(),
       rejectedAt: null,
       approvedAt: null,
+      communityId,
     };
 
     const { resource } = await container.items.create(newRequest);
 
     // Send notification to admin
     try {
-      const adminEmail = process.env.ADMIN_EMAIL || "admin@kasgeld.nl";
       const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-      
-      await sendRegistrationRequestEmail({
-        adminEmail,
-        applicantName: `${firstName} ${lastName}`,
-        applicantEmail: email,
-        reason: referrer || "Geen reden vermeld",
-        baseUrl
-      });
+      const users = await getContainer("users");
+      for (const ownerId of community.ownerUserIds) {
+        const { resource: owner } = await users.item(ownerId, ownerId).read();
+        if (!owner?.email) continue;
+        await sendRegistrationRequestEmail({
+          adminEmail: owner.email,
+          applicantName: `${firstName} ${lastName}`,
+          applicantEmail: email,
+          reason: referrer || "Geen reden vermeld",
+          baseUrl
+        });
+      }
     } catch (emailError) {
       console.error("Failed to send registration request notification:", emailError);
       // Don't fail the request if email fails
@@ -73,12 +89,15 @@ export async function POST(req) {
 
 export async function GET(req) {
   try {
+    const { response, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
     const container = await getContainer(registrationContainerId);
 
     // Get all pending and rejected requests
     const querySpec = {
-      query: "SELECT * FROM c WHERE c.status = @pending OR c.status = @rejected ORDER BY c.createdAt DESC",
+      query: "SELECT * FROM c WHERE c.communityId = @communityId AND (c.status = @pending OR c.status = @rejected) ORDER BY c.createdAt DESC",
       parameters: [
+        { name: "@communityId", value: communityId },
         { name: "@pending", value: "pending" },
         { name: "@rejected", value: "rejected" }
       ]
