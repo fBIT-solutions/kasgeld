@@ -1,30 +1,16 @@
 import { getContainer } from "@/lib/cosmosdb";
-import { auth } from "@/auth";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { sendWelcomeEmail } from "@/lib/email-service";
+import { getCommunityContext } from "@/lib/communities";
 
 const containerId = "users";
 
 export async function POST(req) {
   try {
-    // Check authentication and admin role
-    const session = await auth();
-    if (!session) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401 }
-      );
-    }
-
-    // Check if user is admin
-    const isAdmin = session.user?.role?.includes("admin");
-    if (!isAdmin) {
-      return new Response(
-        JSON.stringify({ error: "Only admins can create users" }),
-        { status: 403 }
-      );
-    }
+    const { response, session, community, container: communitiesContainer } =
+      await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
 
     const container = await getContainer(containerId);
 
@@ -33,11 +19,10 @@ export async function POST(req) {
       firstname,
       lastname,
       displayname,
-      role = "member",
     } = await req.json();
 
     // Validate input
-    if (!email) {
+    if (typeof email !== "string" || !email.trim()) {
       return new Response(
         JSON.stringify({ error: "Email is required" }),
         { status: 400 }
@@ -45,10 +30,11 @@ export async function POST(req) {
     }
 
     // Check if user already exists
+    const normalizedEmail = email.trim().toLowerCase();
     const existingUser = await container.items
       .query({
-        query: "SELECT * FROM c WHERE c.email = @email",
-        parameters: [{ name: "@email", value: email }],
+        query: "SELECT * FROM c WHERE LOWER(c.email) = @email",
+        parameters: [{ name: "@email", value: normalizedEmail }],
       })
       .fetchAll();
 
@@ -70,12 +56,12 @@ export async function POST(req) {
     // Create user with OTP
     const newUser = {
       id: nanoid(),
-      email,
+      email: normalizedEmail,
       firstname: firstname || "",
       lastname: lastname || "",
-      displayname: displayname || email.split("@")[0],
+      displayname: displayname || normalizedEmail.split("@")[0],
       password: passwordHash,
-      role: [role],
+      role: ["member"],
       otp: otpHash,
       otpExpires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
       mustChangePassword: true,
@@ -85,6 +71,8 @@ export async function POST(req) {
 
     // Save to database
     const { resource: createdUser } = await container.items.create(newUser);
+    community.memberUserIds.push(createdUser.id);
+    await communitiesContainer.item(community.id, community.id).replace(community);
 
     console.log(`User created with ID: ${createdUser.id}`);
 
