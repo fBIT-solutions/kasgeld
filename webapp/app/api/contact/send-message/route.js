@@ -1,6 +1,6 @@
 import { getContainer } from "@/lib/cosmosdb";
-import { auth } from "@/auth";
 import { sendContactMessage } from "@/lib/email-service";
+import { getCommunityContext } from "@/lib/communities";
 
 const messageContainerId = "contact-messages";
 
@@ -11,14 +11,8 @@ const messageContainerId = "contact-messages";
  */
 export async function POST(req) {
   try {
-    const session = await auth();
-
-    if (!session || !session.user?.email) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401 }
-      );
-    }
+    const { response, session, community, communityId } = await getCommunityContext(req);
+    if (response) return response;
 
     const { subject, message } = await req.json();
 
@@ -29,18 +23,24 @@ export async function POST(req) {
       );
     }
 
-    // Get admin email from settings or env
-    let adminEmail = process.env.ADMIN_EMAIL || "admin@kasgeld.nl";
-    try {
-      const settingsResponse = await fetch(
-        `${process.env.NEXTAUTH_URL}/api/settings/get-config`
-      );
-      if (settingsResponse.ok) {
-        const config = await settingsResponse.json();
-        adminEmail = config.adminEmail || adminEmail;
-      }
-    } catch (err) {
-      console.error("Error fetching admin email from settings:", err);
+    const settings = await getContainer("settings");
+    const { resources: configRecords } = await settings.items.query({
+      query: "SELECT * FROM c WHERE c.id = @id AND c.communityId = @communityId",
+      parameters: [
+        { name: "@id", value: `community-${communityId}-config` },
+        { name: "@communityId", value: communityId },
+      ],
+    }).fetchAll();
+    const ownerUsers = await Promise.all(
+      community.ownerUserIds.map(async (ownerId) => {
+        const users = await getContainer("users");
+        const { resource: user } = await users.item(ownerId, ownerId).read();
+        return user?.email;
+      }),
+    );
+    const adminEmail = configRecords[0]?.adminEmail || ownerUsers.filter(Boolean)[0];
+    if (!adminEmail) {
+      return Response.json({ error: "No community contact email is configured" }, { status: 400 });
     }
 
     // Store message in database
@@ -55,6 +55,7 @@ export async function POST(req) {
       status: "new",
       createdAt: new Date().toISOString(),
       readAt: null,
+      communityId,
     };
 
     await container.items.create(messageDoc);
@@ -106,19 +107,14 @@ export async function POST(req) {
  */
 export async function GET(req) {
   try {
-    const session = await auth();
-
-    if (!session || !session.user?.role?.includes("admin")) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 403 }
-      );
-    }
+    const { response, communityId } = await getCommunityContext(req, { ownerOnly: true });
+    if (response) return response;
 
     const container = await getContainer(messageContainerId);
     const { resources } = await container.items
       .query({
-        query: "SELECT * FROM c ORDER BY c.createdAt DESC",
+        query: "SELECT * FROM c WHERE c.communityId = @communityId ORDER BY c.createdAt DESC",
+        parameters: [{ name: "@communityId", value: communityId }],
       })
       .fetchAll();
 

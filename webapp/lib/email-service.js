@@ -683,43 +683,43 @@ Dit is een automatische melding van het Kasgeld-systeem.
   }
 }
 
-/**
- * Send unit assigned notification
- * @param {Object} options
- */
-export async function sendUnitAssignedEmail(options) {
-  const { recipientEmail, recipientName, handNumber, month, year } = options;
+export async function sendUnitAssignmentsEmail(options) {
+  const { recipientEmail, recipientName, year, assignments } = options;
+  const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character]);
+  const assignmentRows = assignments.map(({ month, hand }) => `
+    <tr>
+      <td style="padding: 8px 0;">${escapeHtml(month)}</td>
+      <td style="padding: 8px 0; text-align: right;">Hand ${escapeHtml(hand)}</td>
+    </tr>
+  `).join("");
+  const assignmentText = assignments.map(({ month, hand }) => `- ${month}: Hand ${hand}`).join("\n");
 
   const htmlContent = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px;">
-        <h1 style="color: #4CAF50; margin-top: 0;">✓ Hand Toegewezen</h1>
+        <h1 style="color: #4CAF50; margin-top: 0;">✓ Toewijzingen bevestigd</h1>
         
         <p style="color: #666; font-size: 16px;">
-          Hallo ${recipientName},
+          Hallo ${escapeHtml(recipientName)},
         </p>
         
         <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; border-left: 4px solid #4CAF50; margin: 20px 0;">
           <p style="color: #2e7d32; margin: 0;">
-            Je bent toegewezen aan <strong>Hand ${handNumber}</strong> voor <strong>${month} ${year}</strong>.
+            Hieronder staan je handen voor ${escapeHtml(year)}.
           </p>
         </div>
 
         <div style="background-color: white; padding: 20px; border: 1px solid #ddd; border-radius: 4px; margin: 15px 0;">
-          <h3 style="color: #333; margin-top: 0;">Toewijzingsdetails</h3>
-          <table style="width: 100%; color: #666;">
-            <tr>
-              <td style="padding: 8px 0;"><strong>Hand nummer:</strong></td>
-              <td style="padding: 8px 0; text-align: right;">${handNumber}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0;"><strong>Maand:</strong></td>
-              <td style="padding: 8px 0; text-align: right;">${month}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0;"><strong>Jaar:</strong></td>
-              <td style="padding: 8px 0; text-align: right;">${year}</td>
-            </tr>
+          <h3 style="color: #333; margin-top: 0;">Jouw toewijzingen</h3>
+          <table style="width: 100%; color: #666; border-collapse: collapse;">
+            <thead><tr><th align="left">Maand</th><th align="right">Unit</th></tr></thead>
+            <tbody>${assignmentRows}</tbody>
           </table>
         </div>
 
@@ -735,16 +735,14 @@ export async function sendUnitAssignedEmail(options) {
   `;
 
   const textContent = `
-Hand Toegewezen
+Toewijzingen bevestigd
 
 Hallo ${recipientName},
 
-Je bent toegewezen aan Hand ${handNumber} voor ${month} ${year}.
+Hieronder staan je handen voor ${year}.
 
-Toewijzingsdetails
-Hand nummer: ${handNumber}
-Maand: ${month}
-Jaar: ${year}
+Jouw toewijzingen:
+${assignmentText}
 
 Zorg dat je je verplichtingen op tijd nakomt. Bij vragen kun je altijd contact opnemen met de beheerder.
 
@@ -761,13 +759,17 @@ Dit is een automatische melding van het Kasgeld-systeem.
         recipientName,
         htmlContent,
         textContent,
-        subject: `Kasgeld: Hand ${handNumber} Toegewezen - ${month} ${year}`,
+        subject: `Kasgeld: Jouw toewijzingen voor ${year}`,
       }),
     });
+    if (!response.ok) {
+      const result = await response.json();
+      throw new Error(result.error || "Failed to send assignment email");
+    }
 
     return { success: true };
   } catch (error) {
-    console.error("Error sending unit assigned email:", error);
+    console.error("Error sending unit assignments email:", error);
     throw error;
   }
 }
