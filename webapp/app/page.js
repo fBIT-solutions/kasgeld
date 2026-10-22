@@ -13,19 +13,16 @@ import { Button } from "@/components/ui/button";
 import { SignInForm } from "@/components/signin_form";
 import EventsPage from "./events/page";
 import dayjs from "dayjs";
-import { Currency, BanknoteArrowDownIcon } from "lucide-react";
+import { BanknoteArrowDownIcon } from "lucide-react";
 import { ContactMessageButton } from "@/components/contact-message-button";
 import { KasgeldRulesButton } from "@/components/kasgeld-rules-button";
 import { useCommunity } from "@/context/CommunityContext";
 
 
 export default function Home() {
-    const { view } = useView();
-    const { setView } = useView();
     const { data: session, status } = useSession();
     const { activeCommunity } = useCommunity();
     const router = useRouter();
-    const date = dayjs().startOf('week').format('YYYY-MM-DD');
     const [runs, setRuns] = useState([]);
     const [users, setUsers] = useState([]);
     const [settings, setSettings] = useState({});

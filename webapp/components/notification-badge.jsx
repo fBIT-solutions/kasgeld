@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -22,12 +22,12 @@ import { toast } from "sonner";
 export default function NotificationBadge() {
   const { data: session, status } = useSession();
   const { activeCommunity } = useCommunity();
-  const router = useRouter();
   const [openDialogOpen, setOpenDialogOpen] = useState(false);
   const [incomingSwapRequests, setIncomingSwapRequests] = useState([]);
   const [outgoingSwapRequests, setOutgoingSwapRequests] = useState([]);
   const [registrationRequests, setRegistrationRequests] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [hasLoadedTasks, setHasLoadedTasks] = useState(false);
   
   // Swap handling state
   const [selectedSwap, setSelectedSwap] = useState(null);
@@ -43,19 +43,8 @@ export default function NotificationBadge() {
   const [regRejectionMessage, setRegRejectionMessage] = useState("");
   const [regIsProcessing, setRegIsProcessing] = useState(false);
 
-  // Fetch open tasks on mount and whenever session changes
-  useEffect(() => {
-    if (status === "authenticated" && session?.user?.id) {
-      fetchOpenTasks();
-      // Optionally refresh every 30 seconds
-      const interval = setInterval(() => {
-        fetchOpenTasks();
-      }, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [status, session?.user?.id, activeCommunity?.id]);
-
   const fetchOpenTasks = async () => {
+    if (!session?.user?.id) return;
     try {
       setLoading(true);
       
@@ -88,6 +77,41 @@ export default function NotificationBadge() {
       setLoading(false);
     }
   };
+
+  // Fetch open tasks on mount and whenever session changes
+  useEffect(() => {
+    if (status !== "authenticated" || !session?.user?.id) return;
+    let cancelled = false;
+    const refreshTasks = () => {
+      const swapsRequest = fetch(`/api/swaps?userId=${session.user.id}`)
+        .then(response => response.ok ? response.json() : []);
+      const registrationsRequest = activeCommunity?.isOwner
+        ? fetch("/api/registration-requests").then(response => response.ok ? response.json() : [])
+        : Promise.resolve([]);
+
+      Promise.all([swapsRequest, registrationsRequest])
+        .then(([swaps, registrations]) => {
+          if (cancelled) return;
+          const pendingSwaps = swaps.filter(swap => swap.status === "pending");
+          setIncomingSwapRequests(pendingSwaps.filter(swap => swap.targetedUserId === session.user.id));
+          setOutgoingSwapRequests(pendingSwaps.filter(swap => swap.requesterUserId === session.user.id));
+          setRegistrationRequests(registrations.filter(request => request.status === "pending"));
+        })
+        .catch(error => {
+          if (!cancelled) console.error("Error fetching open tasks:", error);
+        })
+        .finally(() => {
+          if (!cancelled) setHasLoadedTasks(true);
+        });
+    };
+
+    refreshTasks();
+    const interval = setInterval(refreshTasks, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [status, session?.user?.id, activeCommunity?.isOwner]);
 
   const openSwapResponseDialog = (swap, action) => {
     setSelectedSwap(swap);
@@ -247,7 +271,7 @@ export default function NotificationBadge() {
             </DialogDescription>
           </DialogHeader>
 
-          {loading ? (
+          {loading || (status === "authenticated" && !hasLoadedTasks) ? (
             <div className="text-center py-8">Taken laden...</div>
           ) : totalCount === 0 ? (
             <div className="text-center py-8 text-gray-500">

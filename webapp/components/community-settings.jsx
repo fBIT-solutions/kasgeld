@@ -24,7 +24,6 @@ export function CommunitySettings() {
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
 
   const refreshMembers = useCallback(async () => {
-    setIsLoadingMembers(true);
     try {
       const response = await fetch("/api/communities/members", { cache: "no-store" });
       const data = await response.json();
@@ -39,8 +38,35 @@ export function CommunitySettings() {
   }, []);
 
   useEffect(() => {
-    if (isOpen && activeCommunity?.isOwner) refreshMembers();
-  }, [isOpen, activeCommunityId, activeCommunity?.isOwner, refreshMembers]);
+    if (!isOpen || !activeCommunity?.isOwner) return;
+    let cancelled = false;
+    fetch("/api/communities/members", { cache: "no-store" })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Could not load members");
+        return data;
+      })
+      .then(data => {
+        if (!cancelled) setMembers(data.members || []);
+      })
+      .catch(error => {
+        if (cancelled) return;
+        console.error("Error loading community members:", error);
+        toast.error(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingMembers(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, activeCommunityId, activeCommunity?.isOwner]);
+
+  const handleToggleOpen = () => {
+    const willOpen = !isOpen;
+    setIsOpen(willOpen);
+    if (willOpen && activeCommunity?.isOwner) setIsLoadingMembers(true);
+  };
 
   const handleCreateCommunity = async (event) => {
     event.preventDefault();
@@ -106,7 +132,7 @@ export function CommunitySettings() {
             Beheer {activeCommunity.name}, leden en eigen communities.
           </p>
         </div>
-        <Button variant="outline" onClick={() => setIsOpen(!isOpen)}>
+        <Button variant="outline" onClick={handleToggleOpen}>
           {isOpen ? "Sluiten" : "Community-instellingen"}
         </Button>
       </div>

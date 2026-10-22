@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import CreateKasgeldRun from "@/components/createKasgeldRun";
@@ -35,11 +35,18 @@ import { useCommunity } from "@/context/CommunityContext";
 export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns }) {
     const { data: session, status } = useSession();
     const { activeCommunity } = useCommunity();
-    const router = useRouter();
     const isAdmin = activeCommunity?.isOwner;
-    const [selectedRun, setSelectedRun] = useState(null);
+    const [selectedRunId, setSelectedRunId] = useState(null);
+    const selectedRun = runs?.find(run => run.id === selectedRunId) || null;
     const [openRunDetails, setOpenRunDetails] = useState(false);
-    const [editRun, setEditRun] = useState([]);
+    const [editRunState, setEditRunState] = useState({ baseRun: null, draft: null });
+    const editRun = editRunState.baseRun === selectedRun
+        ? editRunState.draft ?? selectedRun ?? []
+        : selectedRun ?? [];
+    const setEditRun = (nextEditRun) => {
+        const draft = typeof nextEditRun === "function" ? nextEditRun(editRun) : nextEditRun;
+        setEditRunState({ baseRun: selectedRun, draft });
+    };
     const [createRunSheetOpen, setCreateRunSheetOpen] = useState(false);
 
     // Dialog states
@@ -49,21 +56,6 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
     const [viewReportDialogOpen, setViewReportDialogOpen] = useState(false);
     const [selectedReport, setSelectedReport] = useState(null);
     const [clearAssignmentsDialogOpen, setClearAssignmentsDialogOpen] = useState(false);
-
-    // Effect to handle runs prop changes
-    useEffect(() => {
-        if (selectedRun && runs && Array.isArray(runs)) {
-            const stillExists = runs.find(r => r.id === selectedRun.id);
-            if (!stillExists) {
-                setSelectedRun(null);
-                setEditRun([]);
-            } else {
-                const updatedRun = runs.find(r => r.id === selectedRun.id);
-                setSelectedRun(updatedRun);
-                setEditRun(updatedRun);
-            }
-        }
-    }, [runs, selectedRun]);
 
     if (status !== "authenticated") {
         return (
@@ -134,7 +126,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                         onValueChange={runId => {
                             if (!runs || !Array.isArray(runs)) return;
                             const run = runs.find(r => r.id === runId);
-                            setSelectedRun(run);
+                            setSelectedRunId(run.id);
                             setOpenRunDetails(true);
                             setEditRun({ ...run });
                         }}
@@ -161,7 +153,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                 onChangeRuns(freshRuns);
                                 const createdRun = freshRuns.find(r => r.id === newRun.id);
                                 if (createdRun) {
-                                    setSelectedRun(createdRun);
+                                    setSelectedRunId(createdRun.id);
                                     setEditRun(createdRun);
                                 }
                             }
@@ -175,7 +167,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
             <Sheet open={openRunDetails} onOpenChange={(open) => {
                 setOpenRunDetails(open);
                 if (!open) {
-                    setSelectedRun(null);
+                    setSelectedRunId(null);
                     setEditRun([]);
                 }
             }}>
@@ -276,7 +268,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                                 toast.success("Run updated successfully!");
                                                 onChangeRuns(runs.map(u => u.id === selectedRun.id ? { ...u, ...editRun } : u));
                                                 setOpenRunDetails(false);
-                                                setSelectedRun(null);
+                                                setSelectedRunId(null);
                                                 setEditRun([]);
                                             } else {
                                                 toast.error("Failed to update run.");
@@ -295,7 +287,7 @@ export default function KasgeldManage({ users, runs, onChangeUsers, onChangeRuns
                                                 toast.success("Run deleted successfully!");
                                                 onChangeRuns(runs.filter(u => u.id !== selectedRun.id));
                                                 setOpenRunDetails(false);
-                                                setSelectedRun(null);
+                                                setSelectedRunId(null);
                                                 setEditRun([]);
                                             } else {
                                                 toast.error("Failed to delete run.");

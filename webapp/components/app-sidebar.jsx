@@ -29,7 +29,7 @@ import {
   export function AppSidebar() {
     const router = useRouter();
     const session = useSession();
-    const { state,open,setOpen,openMobile,setOpenMobile,isMobile,toggleSidebar} = useSidebar()
+    const { toggleSidebar} = useSidebar()
     const { setView } = useView();
     return (
       <Sidebar variant="sidebar" collapsible="icon" >

@@ -15,23 +15,25 @@ export default function AppSettingsPanel() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    fetchSettings();
+    let cancelled = false;
+    fetch("/api/settings/get-config")
+      .then(response => response.json())
+      .then(data => {
+        if (cancelled) return;
+        setAdminEmail(data.adminEmail || "");
+        setPaymentUrl(data.paymentUrl || "");
+      })
+      .catch(error => {
+        console.error("Error fetching settings:", error);
+        toast.error("Fout bij ophalen van instellingen");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  const fetchSettings = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/settings/get-config");
-      const data = await response.json();
-      setAdminEmail(data.adminEmail || "");
-      setPaymentUrl(data.paymentUrl || "");
-    } catch (error) {
-      console.error("Error fetching settings:", error);
-      toast.error("Fout bij ophalen van instellingen");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleSave = async (e) => {
     e.preventDefault();

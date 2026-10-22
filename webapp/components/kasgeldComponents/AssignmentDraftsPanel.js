@@ -14,31 +14,33 @@ import { toast } from "sonner";
 
 export default function AssignmentDraftsPanel({ runId, users, isAdmin, refreshTrigger }) {
     const [drafts, setDrafts] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState(Boolean(runId));
     const [selectedDraft, setSelectedDraft] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
 
     // Load drafts on mount, when runId changes, or when refreshTrigger changes
     useEffect(() => {
-        if (runId) {
-            loadDrafts();
-        }
+        if (!runId) return;
+        let cancelled = false;
+        fetch(`/api/unit-assignments?runId=${encodeURIComponent(runId)}`)
+            .then(response => {
+                if (!response.ok) throw new Error("Fout bij laden van toewijzingen");
+                return response.json();
+            })
+            .then(data => {
+                if (!cancelled) setDrafts(data || []);
+            })
+            .catch(error => {
+                console.error("Error loading drafts:", error);
+                toast.error("Fout bij het laden van toewijzingen");
+            })
+            .finally(() => {
+                if (!cancelled) setIsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
     }, [runId, refreshTrigger]);
-
-    const loadDrafts = async () => {
-        setIsLoading(true);
-        try {
-            const response = await fetch(`/api/unit-assignments?runId=${encodeURIComponent(runId)}`);
-            if (!response.ok) throw new Error("Fout bij laden van toewijzingen");
-            const data = await response.json();
-            setDrafts(data || []);
-        } catch (error) {
-            console.error("Error loading drafts:", error);
-            toast.error("Fout bij het laden van toewijzingen");
-        } finally {
-            setIsLoading(false);
-        }
-    };
 
     const handleDelete = async (assignmentId) => {
         if (!confirm("Weet je zeker dat je deze toewijzing wilt verwijderen?")) return;

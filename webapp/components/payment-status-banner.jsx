@@ -111,7 +111,6 @@ export function PaymentStatusBanner({ userEmail, userId }) {
             });
 
             if (autoCreateResponse.ok) {
-              const autoCreateData = await autoCreateResponse.json();
               isPaid = false; // Newly created, not paid yet
             } else {
               // Auto-create failed - user likely has no hands

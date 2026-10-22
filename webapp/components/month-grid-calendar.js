@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -24,24 +24,16 @@ const MonthGridCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
     const { data: session } = useSession();
     const { activeCommunity } = useCommunity();
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [selectedEventState, setSelectedEvent] = useState(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [swapDialogOpen, setSwapDialogOpen] = useState(false);
     const [userUnits, setUserUnits] = useState([]);
     const [selectedUserUnit, setSelectedUserUnit] = useState("");
     const [swapNote, setSwapNote] = useState("");
 
-    // Force component update when runs change
-    useEffect(() => {
-        // Reset selectedEvent if it's no longer valid
-        if (selectedEvent && runs && Array.isArray(runs)) {
-            const runExists = runs.find(r => r.id === selectedEvent.runId);
-            if (!runExists) {
-                setSelectedEvent(null);
-                setDialogOpen(false);
-            }
-        }
-    }, [runs, selectedEvent]);
+    const selectedEvent = selectedEventState && runs?.some(run => run.id === selectedEventState.runId)
+        ? selectedEventState
+        : null;
 
     const monthNames = [
         'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -260,7 +252,7 @@ const MonthGridCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
             </ScrollArea>
 
             {/* Unit Details Dialog */}
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <Dialog open={dialogOpen && Boolean(selectedEvent)} onOpenChange={setDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Unit Details</DialogTitle>

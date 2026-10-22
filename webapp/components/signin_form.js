@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -228,7 +228,7 @@ export function SignInForm() {
           {step === "login-method" && (
             <div className="space-y-4">
               <p className="text-sm text-gray-600 mb-6">
-                Kies hoe je wilt inloggen. Heb je net een welkomsmail met OTP ontvangen? Selecteer dan "Met OTP Code".
+                Kies hoe je wilt inloggen. Heb je net een welkomsmail met OTP ontvangen? Selecteer dan &quot;Met OTP Code&quot;.
               </p>
               
               <Button

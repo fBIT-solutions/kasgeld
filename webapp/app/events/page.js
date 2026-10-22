@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import MonthGridCalendar from "@/components/month-grid-calendar";
 
 export default function EventsPage({ users, runs, onChangeUsers, onChangeRuns }) {
-    const [selectedEvent, setSelectedEvent] = useState(null);
+    const [ setSelectedEvent] = useState(null);
     const [editEvent, setEditEvent] = useState(null);
 
     function handleTileClick(run) {

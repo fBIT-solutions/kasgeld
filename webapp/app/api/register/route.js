@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { getItems, addItem, getContainer } from "../../../lib/cosmosdb";
+import { addItem, getContainer } from "../../../lib/cosmosdb";
 
 const containerId = "users";
 

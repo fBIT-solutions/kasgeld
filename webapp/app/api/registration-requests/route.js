@@ -1,5 +1,5 @@
 import { getContainer } from "../../../lib/cosmosdb";
-import { sendRejectionEmail, sendRegistrationRequestEmail } from "../../../lib/email-service";
+import { sendRegistrationRequestEmail } from "../../../lib/email-service";
 import { getActiveCommunityId, getCommunityContainer, getCommunityContext } from "@/lib/communities";
 
 const registrationContainerId = "registration-requests";
@@ -58,8 +58,6 @@ export async function POST(req) {
       approvedAt: null,
       communityId,
     };
-
-    const { resource } = await container.items.create(newRequest);
 
     // Send notification to admin
     try {

@@ -2,7 +2,6 @@ import { getContainer } from "../../../../lib/cosmosdb";
 import { getCommunityContext } from "@/lib/communities";
 
 const paymentsContainerId = "payments";
-const runsContainerId = "runs";
 
 export async function POST(req) {
   try {

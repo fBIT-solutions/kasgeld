@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -18,22 +17,23 @@ export default function RegistrationRequestsPanel() {
   const [selectedRequest, setSelectedRequest] = useState(null);
 
   useEffect(() => {
-    fetchRequests();
+    let cancelled = false;
+    fetch("/api/registration-requests")
+      .then(response => response.json())
+      .then(data => {
+        if (!cancelled) setRequests(data || []);
+      })
+      .catch(error => {
+        console.error("Error fetching requests:", error);
+        toast.error("Fout bij ophalen van registratieverzoeken");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-
-  const fetchRequests = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/registration-requests");
-      const data = await response.json();
-      setRequests(data || []);
-    } catch (error) {
-      console.error("Error fetching requests:", error);
-      toast.error("Fout bij ophalen van registratieverzoeken");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleApprove = async (requestId) => {
     try {

@@ -30,40 +30,36 @@ export default function AutoAssignDialog({
     const [userPreferences, setUserPreferences] = useState({});
     const [isSaving, setIsSaving] = useState(false);
     const [savedAssignmentId, setSavedAssignmentId] = useState(null);
-    const [isLoadingDraft, setIsLoadingDraft] = useState(false);
+    const [loadedDraftRunId, setLoadedDraftRunId] = useState(null);
+    const isLoadingDraft = Boolean(open && run?.id && loadedDraftRunId !== run.id);
+
+    const getAvailableMonths = () => {
+        if (!run?.units) return [];
+        const months = [...new Set(run.units.map(unit => unit.name))];
+        return months.sort();
+    };
 
     // Load saved assignment when dialog opens
     useEffect(() => {
-        if (open && run?.id) {
-            loadSavedAssignment();
-        }
-    }, [open, run?.id]);
+        if (!open || !run?.id) return;
+        let cancelled = false;
+        fetch(`/api/unit-assignments?runId=${encodeURIComponent(run.id)}`)
+            .then(response => {
+                if (!response.ok) throw new Error("Fout bij laden van opgeslagen toewijzingen");
+                return response.json();
+            })
+            .then(assignments => {
+                if (cancelled) return;
+                const draftAssignment = assignments.find(a => a.status === "draft");
+                if (!draftAssignment) return;
 
-    const loadSavedAssignment = async () => {
-        setIsLoadingDraft(true);
-        try {
-            const response = await fetch(`/api/unit-assignments?runId=${encodeURIComponent(run.id)}`);
-            if (!response.ok) throw new Error("Fout bij laden van opgeslagen toewijzingen");
-            
-            const assignments = await response.json();
-            
-            // Get the most recent draft assignment
-            const draftAssignment = assignments.find(a => a.status === "draft");
-            
-            if (draftAssignment) {
-                // Load the assignment data into the form
                 setSavedAssignmentId(draftAssignment.id);
-                
-                // Reset and populate state from saved assignment
                 setSelectedUsers(draftAssignment.assignments.map(a => a.userId));
-                
+
                 const handCounts = {};
                 const monthPrefs = {};
-                
                 draftAssignment.assignments.forEach(assignment => {
                     handCounts[assignment.userId] = assignment.handCount;
-                    
-                    // Convert saved months (e.g., "04") to full format (e.g., "04-2026")
                     if (assignment.preferredMonths?.length > 0) {
                         const availableMonths = getAvailableMonths();
                         const matchedMonths = availableMonths.filter(availMonth => {
@@ -75,25 +71,21 @@ export default function AutoAssignDialog({
                         }
                     }
                 });
-                
+
                 setUserHandCounts(handCounts);
                 setUserPreferences(monthPrefs);
                 toast.success("Opgeslagen toewijzing geladen!");
-            }
-        } catch (error) {
-            console.error("Error loading saved assignment:", error);
-            // Don't show error toast, just silently continue
-        } finally {
-            setIsLoadingDraft(false);
-        }
-    };
-
-    // Get available months from current run
-    const getAvailableMonths = () => {
-        if (!run?.units) return [];
-        const months = [...new Set(run.units.map(unit => unit.name))];
-        return months.sort();
-    };
+            })
+            .catch(error => {
+                if (!cancelled) console.error("Error loading saved assignment:", error);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadedDraftRunId(run.id);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, run?.id, run?.units]);
 
     // Calculate total hands requested
     const getTotalHandsRequested = () => {
@@ -422,7 +414,7 @@ export default function AutoAssignDialog({
                                                     <div>
                                                         <Label className="text-sm font-medium">Voorkeursmaanden</Label>
                                                         <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                                                            {getAvailableMonths().map((month, monthIndex) => (
+                                                            {getAvailableMonths().map((month) => (
                                                                 <label
                                                                     key={month}
                                                                     className="flex min-w-0 cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm hover:bg-muted/60"

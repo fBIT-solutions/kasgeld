@@ -1,5 +1,5 @@
 import { getContainer } from "../../../lib/cosmosdb";
-import { getCommunityContext, withCommunityId } from "@/lib/communities";
+import { getCommunityContext } from "@/lib/communities";
 
 const paymentsContainerId = "payments";
 const runsContainerId = "runs";

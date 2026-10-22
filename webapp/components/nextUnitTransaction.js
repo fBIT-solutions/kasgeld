@@ -14,8 +14,6 @@ const NextUnitTransaction = ({ users, runs }) => {
         if (!session?.user?.id || !runs?.length) return null;
 
         const currentDate = new Date();
-        const currentYear = currentDate.getFullYear();
-        const currentMonth = currentDate.getMonth() + 1; // 0-indexed, so add 1
 
         // Find all units assigned to the current user
         const userUnits = [];

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,14 +22,21 @@ import dayjs from "dayjs";
 import { sendPaymentReminders } from "@/lib/email-service";
 import { useCommunity } from "@/context/CommunityContext";
 
+async function loadPayments(runId) {
+  const response = await fetch(`/api/payments?runId=${runId}`);
+  if (!response.ok) {
+    console.error("Failed to fetch payments:", response.status);
+    return [];
+  }
+  return (await response.json()) || [];
+}
+
 export default function PaymentTracker({ run, users, onChangeRuns }) {
-  const { data: session } = useSession();
   const { activeCommunity } = useCommunity();
   const [monthlyAmount, setMonthlyAmount] = useState(run?.monthlyAmount || 0);
   const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [saveAmount, setSaveAmount] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(null);
+  const [selectedMonthOverride, setSelectedMonth] = useState(null);
   const [sendingReminders, setSendingReminders] = useState(false);
 
   const isAdmin = activeCommunity?.isOwner;
@@ -46,37 +52,35 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
   // Get all months and users for this run to create payment overview (calculated early for hooks)
   const months = run?.units ? [...new Set(run.units.map(u => u.name))].sort(sortMonths) : [];
   const unitUsers = run?.units ? [...new Set(run.units.map(u => u.assignedTo).filter(u => u))] : [];
+  const openMonth = months.find(month => {
+    const unitsInMonth = run?.units?.filter(u => u.name === month) || [];
+    return unitsInMonth.some(u => u.status === "open");
+  });
+  const selectedMonth = months.includes(selectedMonthOverride)
+    ? selectedMonthOverride
+    : openMonth || months[0] || null;
 
   // Fetch payments for this run
   useEffect(() => {
-    if (run?.id) {
-      fetchPayments();
-    }
+    if (!run?.id) return;
+    let cancelled = false;
+    loadPayments(run.id)
+      .then(data => {
+        if (!cancelled) setPayments(data);
+      })
+      .catch(error => {
+        console.error("Error fetching payments:", error);
+        if (!cancelled) setPayments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [run?.id]);
 
-  // Initialize selectedMonth to first month with status "open", or first month if none have status "open"
-  useEffect(() => {
-    if (months.length > 0 && !selectedMonth) {
-      // Find first month with units that have status "open"
-      const openMonth = months.find(month => {
-        const unitsInMonth = run?.units?.filter(u => u.name === month) || [];
-        return unitsInMonth.some(u => u.status === "open");
-      });
-      setSelectedMonth(openMonth || months[0]);
-    }
-  }, [months.length, selectedMonth, run?.units]);
-
   const fetchPayments = async () => {
+    if (!run?.id) return;
     try {
-      const res = await fetch(`/api/payments?runId=${run.id}`);
-      if (res.ok) {
-        const data = await res.json();
-
-        setPayments(data || []);
-      } else {
-        console.error("Failed to fetch payments:", res.status);
-        setPayments([]);
-      }
+      setPayments(await loadPayments(run.id));
     } catch (error) {
       console.error("Error fetching payments:", error);
       setPayments([]);
@@ -411,7 +415,6 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
                     <AccordionContent className="space-y-2 pt-2">
                       {(() => {
                         const monthStatus = getUnitStatus(month);
-                        const statusBadge = getStatusBadge(monthStatus);
                         return (
                           <>
                             {monthStatus === "open" && (
@@ -444,7 +447,7 @@ export default function PaymentTracker({ run, users, onChangeRuns }) {
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-blue-700 mt-2">
-                          <strong>Let op:</strong> Als je deze maand op "Uitbetaald" zet, wordt volgende maand automatisch "Open"
+                          <strong>Let op:</strong> Als je deze maand op &quot;Uitbetaald&quot; zet, wordt volgende maand automatisch &quot;Open&quot;
                         </p>
                       </div>
                       {unitUsers.map(userId => {

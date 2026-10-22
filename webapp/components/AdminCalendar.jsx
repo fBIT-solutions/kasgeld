@@ -19,35 +19,31 @@ export default function AdminCalendar({ run, users, payments = [], onChangeRun, 
 
   // Initialize payments when component mounts or run changes
   useEffect(() => {
-    if (run?.id && run?.units && !paymentsInitialized) {
-      initializePayments();
-    }
-  }, [run?.id, paymentsInitialized]);
+    if (!run?.id || !run?.units || paymentsInitialized) return;
 
-  const initializePayments = async () => {
-    try {
-      console.log("Initializing payments for run:", run.id);
-      const res = await fetch("/api/payments/initialize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          runId: run.id,
-          units: run.units,
-        }),
+    let cancelled = false;
+    fetch("/api/payments/initialize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        runId: run.id,
+        units: run.units,
+      }),
+    })
+      .then(response => response.json())
+      .then(async data => {
+        console.log("Payment initialization result:", data);
+        if (onRefreshPayments) await onRefreshPayments();
+        if (!cancelled) setPaymentsInitialized(true);
+      })
+      .catch(error => {
+        console.error("Error initializing payments:", error);
       });
-      const data = await res.json();
-      console.log("Payment initialization result:", data);
-      
-      // Refresh payments after initialization
-      if (onRefreshPayments) {
-        await onRefreshPayments();
-      }
-      
-      setPaymentsInitialized(true);
-    } catch (error) {
-      console.error("Error initializing payments:", error);
-    }
-  };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [run?.id, run?.units, paymentsInitialized, onRefreshPayments]);
 
   if (!run?.units || run.units.length === 0) {
     return <div className="text-gray-500">Geen units beschikbaar</div>;
@@ -137,7 +133,6 @@ export default function AdminCalendar({ run, users, payments = [], onChangeRun, 
       const unitsInMonth = unitsByMonth[monthName];
       if (!unitsInMonth || unitsInMonth.length === 0) return;
 
-      const firstUnit = unitsInMonth[0];
       const res = await fetch("/api/units/status", {
         method: "POST",
         body: JSON.stringify({
@@ -228,7 +223,7 @@ export default function AdminCalendar({ run, users, payments = [], onChangeRun, 
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-gray-500">
-                        Als je op "Uitbetaald" zet, wordt volgende maand automatisch "Open"
+                        Als je op &quot;Uitbetaald&quot; zet, wordt volgende maand automatisch &quot;Open&quot;
                       </p>
                     </div>
                   </DialogContent>

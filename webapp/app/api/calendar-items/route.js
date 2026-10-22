@@ -1,6 +1,5 @@
 import { getContainer } from "../../../lib/cosmosdb";
 import { getCommunityContext, withCommunityId } from "@/lib/communities";
-import { put } from "@vercel/blob";
 
 const containerId = "calendar";
 

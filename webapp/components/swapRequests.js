@@ -27,22 +27,23 @@ export default function SwapRequests({ users, runs, onChangeUsers, onChangeRuns 
     const [actionType, setActionType] = useState(""); // "accept" or "reject"
 
     useEffect(() => {
-        if (session?.user?.id) {
-            fetchSwapRequests();
-        }
-    }, [session]);
-
-    const fetchSwapRequests = async () => {
-        try {
-            const response = await fetch(`/api/swaps?userId=${session.user.id}`);
-            if (response.ok) {
-                const data = await response.json();
-                setSwapRequests(data);
-            }
-        } catch (error) {
-            console.error("Error fetching swap requests:", error);
-        }
-    };
+        if (!session?.user?.id) return;
+        let cancelled = false;
+        fetch(`/api/swaps?userId=${session.user.id}`)
+            .then(response => {
+                if (!response.ok) return null;
+                return response.json();
+            })
+            .then(data => {
+                if (!cancelled && data) setSwapRequests(data);
+            })
+            .catch(error => {
+                console.error("Error fetching swap requests:", error);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [session?.user?.id]);
 
     const getUserName = (userId) => {
         const user = users?.find(u => u.id === userId);

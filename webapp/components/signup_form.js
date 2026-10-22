@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import dayjs from "dayjs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import QRCodeComponent from "@/components/qr-generator";
-import { Save, X } from "lucide-react";
+import { Save } from "lucide-react";
 
 const roles = ["default", "guest", "member", "family", "admin"];
 
@@ -25,9 +25,14 @@ export function SignUpForm() {
             lastname: "",
             password: "",
             role: ["default"],
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+            expires: null,
         },
     });
+    const { setValue } = form;
+
+    useEffect(() => {
+        setValue("expires", new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
+    }, [setValue]);
 
     async function onSubmit(values) {
 
@@ -38,7 +43,7 @@ export function SignUpForm() {
             lastname: values.lastname,
             password: values.password,
             role: values.role,
-            expires: values.expires ? new Date(values.expires).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Default to 7 days if not provided
+            expires: values.expires ? new Date(values.expires).toISOString() : undefined,
         };
 
         const res = await fetch("/api/register", {
@@ -54,7 +59,6 @@ export function SignUpForm() {
             toast.error("Fout bij het aanmaken van deelnemer.");
             return;
         }
-        const user = await res.json();
         toast.success("Je account is aangemaakt.");
 
         const userToken = Buffer.from(`${values.email}:${values.password}`).toString("base64");

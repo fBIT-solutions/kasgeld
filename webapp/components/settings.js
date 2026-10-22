@@ -23,7 +23,6 @@ import { useCommunity } from "@/context/CommunityContext";
 export default function Settings({ users, runs, onChangeUsers, onChangeRuns }) {
     const { data: session } = useSession();
     const { activeCommunity } = useCommunity();
-    const router = useRouter();
     const [selectedUser, setSelectedUser] = useState(null);
     const [openUserDetails, setOpenUserDetails] = useState(false);
     const [editUser, setEditUser] = useState(null);

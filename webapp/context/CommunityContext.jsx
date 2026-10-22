@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
 
 const CommunityContext = createContext(null);
@@ -12,18 +12,39 @@ export function CommunityProvider({ children }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const refresh = async () => {
+  const fetchCommunities = useCallback(async () => {
+    const response = await fetch("/api/communities", { cache: "no-store" });
+    if (response.status === 401) return { communities: [], activeCommunityId: null };
+    if (!response.ok) throw new Error("Could not load communities");
+    return response.json();
+  }, []);
+
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+    fetchCommunities()
+      .then(data => {
+        if (cancelled) return;
+        setCommunities(data.communities || []);
+        setActiveCommunityId(data.activeCommunityId || null);
+      })
+      .catch(fetchError => {
+        console.error("Error loading communities:", fetchError);
+        if (!cancelled) setError(fetchError.message || "Could not load communities");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [status, fetchCommunities]);
+
+  const refresh = useCallback(async () => {
     setIsLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/communities", { cache: "no-store" });
-      if (!response.ok) {
-        if (response.status !== 401) throw new Error("Could not load communities");
-        setCommunities([]);
-        setActiveCommunityId(null);
-        return;
-      }
-      const data = await response.json();
+      const data = await fetchCommunities();
       setCommunities(data.communities || []);
       setActiveCommunityId(data.activeCommunityId || null);
     } catch (fetchError) {
@@ -32,19 +53,9 @@ export function CommunityProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [fetchCommunities]);
 
-  useEffect(() => {
-    if (status === "authenticated") {
-      refresh();
-    } else if (status === "unauthenticated") {
-      setCommunities([]);
-      setActiveCommunityId(null);
-      setIsLoading(false);
-    }
-  }, [status]);
-
-  const createCommunity = async (name) => {
+  const createCommunity = useCallback(async (name) => {
     const response = await fetch("/api/communities", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,9 +65,9 @@ export function CommunityProvider({ children }) {
     if (!response.ok) throw new Error(data.error || "Could not create community");
     setCommunities(data.communities);
     setActiveCommunityId(data.activeCommunityId);
-  };
+  }, []);
 
-  const switchCommunity = async (communityId) => {
+  const switchCommunity = useCallback(async (communityId) => {
     const response = await fetch("/api/communities/active", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -66,18 +77,21 @@ export function CommunityProvider({ children }) {
     if (!response.ok) throw new Error(data.error || "Could not switch community");
     setActiveCommunityId(data.activeCommunityId);
     window.location.reload();
-  };
+  }, []);
+
+  const visibleCommunities = status === "unauthenticated" ? [] : communities;
+  const visibleActiveCommunityId = status === "unauthenticated" ? null : activeCommunityId;
 
   const value = useMemo(() => ({
-    communities,
-    activeCommunityId,
-    activeCommunity: communities.find((community) => community.id === activeCommunityId) || null,
-    isLoading,
+    communities: visibleCommunities,
+    activeCommunityId: visibleActiveCommunityId,
+    activeCommunity: visibleCommunities.find((community) => community.id === visibleActiveCommunityId) || null,
+    isLoading: status === "loading" || (status !== "unauthenticated" && isLoading),
     error,
     refresh,
     createCommunity,
     switchCommunity,
-  }), [communities, activeCommunityId, isLoading, error]);
+  }), [visibleCommunities, visibleActiveCommunityId, isLoading, status, error, refresh, createCommunity, switchCommunity]);
 
   return <CommunityContext.Provider value={value}>{children}</CommunityContext.Provider>;
 }

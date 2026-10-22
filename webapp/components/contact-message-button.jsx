@@ -98,7 +98,7 @@ export function ContactMessageButton() {
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              Prefix '[Kasgeld Contact]' wordt automatisch toegevoegd
+              Prefix &apos;[Kasgeld Contact]&apos; wordt automatisch toegevoegd
             </p>
           </div>
 

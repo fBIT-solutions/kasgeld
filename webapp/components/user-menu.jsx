@@ -1,7 +1,6 @@
 "use client";
 
 import { signOut, useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { LogOut, Edit2, Loader, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,11 +55,9 @@ export function UserMenu() {
     { value: "12", label: "Dec" },
   ];
 
-  if (!session?.user) {
-    return null;
-  }
-
-  const displayName = session.user.displayname || `${session.user.firstname} ${session.user.lastname}`.trim() || session.user.email;
+  const displayName = session?.user
+    ? session.user.displayname || `${session.user.firstname} ${session.user.lastname}`.trim() || session.user.email
+    : "";
   const initials = displayName
     .split(" ")
     .map((n) => n[0])
@@ -119,15 +116,14 @@ export function UserMenu() {
   };
 
   const handleOpenPreferences = () => {
+    setIsLoadingPreferences(true);
+    setEditUser(null);
     setOpenPreferencesDialog(true);
   };
 
   // Load fresh preferences from database when dialog opens
   useEffect(() => {
     if (openPreferencesDialog && session?.user?.id) {
-      setIsLoadingPreferences(true);
-      setEditUser(null);
-
       const fetchPreferences = async () => {
         try {
           const response = await fetch(`/api/users?id=${encodeURIComponent(session.user.id)}`);
@@ -157,6 +153,10 @@ export function UserMenu() {
       fetchPreferences();
     }
   }, [openPreferencesDialog, session?.user?.id]);
+
+  if (!session?.user) {
+    return null;
+  }
 
   const handleSavePreferences = async () => {
     try {

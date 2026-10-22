@@ -9,7 +9,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Eye, Zap, AlertTriangle } from "lucide-react";
+import { Eye, Zap } from "lucide-react";
 
 export default function UnitsManagement({
     run,

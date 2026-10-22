@@ -1,13 +1,12 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
 import format from 'date-fns/format';
 import parse from 'date-fns/parse';
 import startOfWeek from 'date-fns/startOfWeek';
 import getDay from 'date-fns/getDay';
 import nlNL from 'date-fns/locale/nl';
-import dayjs from 'dayjs';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
@@ -26,7 +25,6 @@ import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useCommunity } from "@/context/CommunityContext";
 
-const DnDCalendar = withDragAndDrop(Calendar)
 const locales = {
     'nl-NL': nlNL,
 }
@@ -42,7 +40,7 @@ const localizer = dateFnsLocalizer({
 const MyCalendar = ({ users, runs, onChangeUsers, onChangeRuns }) => {
     const { data: session } = useSession();
     const { activeCommunity } = useCommunity();
-    const [calendarItems, setCalendarItems] = useState([])
+    const [customCalendarItems, setCustomCalendarItems] = useState([])
     const [currentDate, setCurrentDate] = useState(new Date())
     const [selectedEvent, setSelectedEvent] = useState(null)
     const [dialogOpen, setDialogOpen] = useState(false)
@@ -61,7 +59,7 @@ const getDisplayName = (user) => {
     return user?.displayname || 'Anoniem';
 };
 
-useEffect(() => {
+const calendarItems = useMemo(() => {
     // Transform runs.units into calendar events
     let calendarEvents = [];
     if (runs && Array.isArray(runs)) {
@@ -101,8 +99,8 @@ useEffect(() => {
         });
     }
     
-    setCalendarItems(calendarEvents);
-}, [users, runs, session?.user?.role]);
+    return [...calendarEvents, ...customCalendarItems];
+}, [users, runs, activeCommunity?.isOwner, customCalendarItems]);
 
 // Function to get units assigned to the current user
 const getUserAssignedUnits = () => {
@@ -194,7 +192,7 @@ return (
             onSelectSlot={({ start, end }) => {
                 const title = prompt('Wat is de titel van de afspraak?')
                 if (title) {
-                    setCalendarItems([...calendarItems, { start, end, title }])
+                    setCustomCalendarItems([...customCalendarItems, { start, end, title }])
                 }
             }}
             onSelectEvent={event => {

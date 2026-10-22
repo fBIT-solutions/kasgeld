@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { getItems, addItem, getContainer } from "../../../lib/cosmosdb";
+import { getContainer } from "../../../lib/cosmosdb";
 
 const containerId = "users";
 const container = await getContainer(containerId);
