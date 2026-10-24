@@ -21,7 +21,7 @@ export const authConfig = {
                 const userQuery = await container.items
                     .query({
                         query: "SELECT * FROM c WHERE c.email = @email",
-                        parameters: [{ name: "@email", value: email }],
+                        parameters: [{ name: "@email", value: email.toLowerCase() }],
                     })
                     .fetchAll();
                 
